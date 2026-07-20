@@ -1,5 +1,11 @@
 
 
+## 1.0.6 (2026-07-20)
+
+### Bug Fixes
+
+- Fix the local-font search popup closing when its input receives a pointer click by handling the Radix menu pointer sequence correctly.
+
 ## 1.0.5 (2026-07-20)
 
 ### Bug Fixes

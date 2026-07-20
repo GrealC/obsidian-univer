@@ -15,7 +15,7 @@
 
 `univer-plus` 是一款 Obsidian 桌面端插件，用于在仓库内创建、查看和编辑电子表格与文档。它基于 [dream-num/obsidian-univer](https://github.com/dream-num/obsidian-univer) 继续开发，并以 [Univer](https://github.com/dream-num/univer) 作为编辑器内核。
 
-本分支重点解决旧版长期未更新后出现的兼容性、文件安全和交互问题。当前版本为 **1.0.5**，Univer 已由 **0.2.14** 升级至 **0.25.1**。
+本分支重点解决旧版长期未更新后出现的兼容性、文件安全和交互问题。当前版本为 **1.0.6**，Univer 已由 **0.2.14** 升级至 **0.25.1**。
 
 > [!IMPORTANT]
 > `.xlsx` 和 `.docx` 的目标是安全处理常用 Office 文件，而不是宣称完整复刻 Microsoft Excel 或 Word。插件会在写回可能造成数据丢失时自动进入保护视图。
@@ -27,7 +27,7 @@
 | 项目 | 原实现 | univer-plus |
 | --- | --- | --- |
 | 插件标识 | `univer` | `univer-plus` |
-| 版本线 | 原项目版本 | 从 `1.0.0` 重新开始，当前 `1.0.5` |
+| 版本线 | 原项目版本 | 从 `1.0.0` 重新开始，当前 `1.0.6` |
 | Univer 内核 | `0.2.14` | `0.25.1` |
 | Excel 转换 | Univer Pro 私有交换服务及 WASM | 本地 `ExcelJS` + `JSZip` |
 | 包来源 | 依赖私有 Verdaccio 源 | 全部使用公共 npm registry |

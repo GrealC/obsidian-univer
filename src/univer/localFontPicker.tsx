@@ -26,8 +26,10 @@ export function filterLocalFonts(fonts: readonly IFontConfig[], search: string, 
   return matchingFonts.slice(0, limit)
 }
 
-export function keepFontSearchOpen(event: { stopPropagation: () => void }): void {
-  event.stopPropagation()
+export function keepFontSearchOpen(event: { type: string, stopPropagation: () => void }): void {
+  // Radix needs pointerdown to reach the menu item or pointerup synthesizes an outer click.
+  if (event.type !== 'pointerdown')
+    event.stopPropagation()
 }
 
 function LocalFontFamilyItem({ id, value }: { id: string, value: string }) {
@@ -70,7 +72,9 @@ function LocalFontFamilyItem({ id, value }: { id: string, value: string }) {
           onClick={keepFontSearchOpen}
           onKeyDown={handleSearchKeyDown}
           onMouseDown={keepFontSearchOpen}
+          onMouseUp={keepFontSearchOpen}
           onPointerDown={keepFontSearchOpen}
+          onPointerUp={keepFontSearchOpen}
           placeholder={localeService.t('univerPlus.searchFonts')}
           type="search"
           value={search}
