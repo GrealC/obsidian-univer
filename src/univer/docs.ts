@@ -10,6 +10,7 @@ import { defaultTheme } from '@univerjs/themes'
 import { getLanguage } from '@/utils/common'
 import { createUniver } from './create'
 import { registerLocalFonts } from './fonts'
+import { installLocalFontPicker } from './localFontPicker'
 
 import '@univerjs/preset-docs-core/lib/index.css'
 
@@ -32,6 +33,7 @@ export function docInit(container: HTMLElement, settings: UniverPluginSettings):
     ],
   })
 
+  installLocalFontPicker(runtime)
   void registerLocalFonts(runtime)
 
   return runtime

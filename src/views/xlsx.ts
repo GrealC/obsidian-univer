@@ -7,7 +7,7 @@ import { FileView, Notice, setIcon } from 'obsidian'
 import { inspectXlsx } from '@/excel/capabilities'
 import { exportXlsx, importXlsx } from '@/excel/converter'
 import { assertSafeWorkbookTransition } from '@/excel/safety'
-import { createXlsxBackup } from '@/services/backup'
+import { createXlsxBackup, pruneBinaryBackups } from '@/services/backup'
 import { SaveCoordinator } from '@/services/saveCoordinator'
 import { sheetInit } from '@/univer/sheets'
 import { observeTheme } from '@/univer/theme'
@@ -201,6 +201,7 @@ export class XlsxTypeView extends FileView {
           this.backupCreated = true
         }
         await this.app.vault.modifyBinary(file, output)
+        await pruneBinaryBackups(this.app, file).catch(() => undefined)
         this.lastKnownBuffer = output
         this.baseline = serialized
         this.lastSavedSnapshot = cloneSnapshot(serialized)

@@ -83,6 +83,112 @@
   color: var(--text-warning);
 }
 
+.univer-protected-bar {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 9px;
+  align-items: center;
+  min-height: 42px;
+  padding: 6px 10px 6px 12px;
+  color: var(--text-normal);
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.univer-protected-bar__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--text-warning);
+}
+
+.univer-protected-bar__icon > svg,
+.univer-protected-bar__details > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.univer-protected-bar__copy {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.univer-protected-bar__copy strong {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.univer-protected-bar__copy span {
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.univer-protected-bar__details {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+}
+
+.univer-protected-bar__edit {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 9px;
+  margin: 0;
+  color: var(--text-normal);
+  background: transparent;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.univer-protected-bar__edit:hover:not(:disabled) {
+  color: var(--text-accent);
+  background: var(--background-modifier-hover);
+  border-color: var(--background-modifier-border-hover);
+}
+
+.univer-protected-bar__edit > span:first-child,
+.univer-protected-bar__edit > span:first-child > svg {
+  width: 15px;
+  height: 15px;
+}
+
+.univer-docx-preview {
+  overflow: auto;
+  overscroll-behavior: contain;
+  color: #1f2328;
+  background: var(--background-secondary-alt);
+}
+
+.univer-docx-preview .univer-plus-docx-wrapper {
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 24px max(16px, calc((100% - 1100px) / 2));
+  background: var(--background-secondary-alt);
+}
+
+.univer-docx-preview section.univer-plus-docx {
+  margin: 0 auto 24px;
+  color: #1f2328;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%), 0 8px 24px rgb(0 0 0 / 10%);
+}
+
+.univer-docx-preview section.univer-plus-docx:last-child {
+  margin-bottom: 0;
+}
+
 .univer-error {
   color: var(--text-error);
 }
@@ -120,6 +226,41 @@
 .univer-editor-container button.univer-sheet-bar-btn {
   background-color: transparent;
   box-shadow: none;
+}
+
+.univer-editor-container button[data-u-command],
+.univer-editor-container [data-u-command] button,
+.univer-editor-container .univer-toolbar-button-selector-main,
+.univer-editor-container .univer-toolbar-button-selector-trigger,
+.univer-editor-container .univer-toolbar-selector-root,
+.univer-editor-container .univer-toolbar-selector-trigger,
+.univer-editor-container button.univer-bg-gray-50,
+.univer-editor-container button.univer-bg-gray-100,
+.univer-editor-container button.univer-shadow,
+.univer-editor-container button.univer-shadow-sm,
+.univer-editor-container button.univer-shadow-md {
+  background-color: transparent !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.univer-editor-container button[data-u-command]:hover:not(:disabled),
+.univer-editor-container [data-u-command] button:hover:not(:disabled),
+.univer-editor-container .univer-toolbar-button-selector-main:hover,
+.univer-editor-container .univer-toolbar-button-selector-trigger:hover,
+.univer-editor-container .univer-toolbar-selector-root:hover,
+.univer-editor-container .univer-toolbar-selector-trigger:hover {
+  background-color: var(--background-modifier-hover) !important;
+}
+
+.univer-editor-container button[data-u-command][aria-pressed="true"],
+.univer-editor-container [data-u-command][aria-pressed="true"],
+.univer-editor-container [data-state="on"],
+.univer-editor-container [data-state="checked"] {
+  color: var(--text-accent) !important;
+  background-color: transparent !important;
+  box-shadow: inset 0 -2px 0 var(--interactive-accent) !important;
 }
 
 .univer-editor-container .univer-input,
@@ -223,5 +364,25 @@ input.univer-plus-font-picker__search:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .univer-save-status > svg {
     animation: none !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .univer-protected-bar__copy {
+    display: block;
+  }
+
+  .univer-protected-bar__copy strong,
+  .univer-protected-bar__copy span {
+    display: block;
+  }
+
+  .univer-protected-bar__edit > span:last-child {
+    display: none;
+  }
+
+  .univer-docx-preview .univer-plus-docx-wrapper {
+    align-items: flex-start;
+    padding: 12px;
   }
 }

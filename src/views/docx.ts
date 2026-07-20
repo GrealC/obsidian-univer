@@ -3,11 +3,12 @@ import type { IconName, TFile, WorkspaceLeaf } from 'obsidian'
 import type { UniverPluginSettings } from '@/types/setting'
 import type { UniverRuntime } from '@/univer/create'
 import { CommandType } from '@univerjs/core'
-import { FileView, Notice, setIcon } from 'obsidian'
+import { FileView, normalizePath, Notice, setIcon } from 'obsidian'
 import { inspectDocx } from '@/docx/capabilities'
 import { exportDocx, importDocx } from '@/docx/converter'
+import { renderDocxPreview } from '@/docx/preview'
 import { assertSafeDocumentTransition } from '@/docx/safety'
-import { createBinaryBackup } from '@/services/backup'
+import { createBinaryBackup, pruneBinaryBackups } from '@/services/backup'
 import { SaveCoordinator } from '@/services/saveCoordinator'
 import { docInit } from '@/univer/docs'
 import { observeTheme } from '@/univer/theme'
@@ -43,6 +44,7 @@ export class DocxTypeView extends FileView {
   private lastKnownBuffer?: ArrayBuffer
   private protectedReasons: string[] = []
   private lastReadOnlyNoticeAt = 0
+  private creatingEditableCopy = false
 
   constructor(leaf: WorkspaceLeaf, private readonly settings: UniverPluginSettings) {
     super(leaf)
@@ -88,6 +90,26 @@ export class DocxTypeView extends FileView {
       const raw = await this.app.vault.readBinary(file)
       this.lastKnownBuffer = raw
       const inspection = await inspectDocx(raw)
+      this.readOnly = inspection.readOnly
+      this.protectedReasons = inspection.reasons
+
+      if (this.readOnly) {
+        this.renderProtectedHeader(container)
+        try {
+          container.addClass('univer-docx-preview')
+          await renderDocxPreview(raw, container)
+        }
+        catch (previewError) {
+          container.empty()
+          container.removeClass('univer-docx-preview')
+          const documentData = await importDocx(raw, file.basename)
+          this.createProtectedUniverFallback(container, documentData)
+          new Notice(`High-fidelity Word preview failed; showing the text fallback: ${errorMessage(previewError)}`, 8000)
+        }
+        this.setStatus('protected')
+        return
+      }
+
       const documentData = await importDocx(raw, file.basename)
       this.runtime = docInit(container, this.settings)
       this.runtime.univerAPI.createUniverDoc(documentData)
@@ -95,32 +117,11 @@ export class DocxTypeView extends FileView {
       const initialSnapshot = this.runtime.univerAPI.getActiveDocument()?.getSnapshot()
       this.baseline = initialSnapshot ? JSON.stringify(initialSnapshot) : ''
       this.lastSavedSnapshot = this.baseline ? cloneSnapshot(this.baseline) : undefined
-      this.readOnly = inspection.readOnly
-      this.protectedReasons = inspection.reasons
-
-      if (this.readOnly) {
-        container.classList.add('univer-editor-readonly')
-        container.setAttr('aria-readonly', 'true')
-        const warning = this.contentEl.createDiv({
-          cls: 'univer-readonly-warning',
-          text: `Protected view: ${inspection.reasons.join(', ')} cannot be preserved safely. You can preview and copy content, but the original file will not be overwritten.`,
-        })
-        container.before(warning)
-        this.commandDisposable = this.runtime.univerAPI.addEvent(this.runtime.univerAPI.Event.BeforeCommandExecute, (event) => {
-          if (event.type !== CommandType.MUTATION)
-            return
-          event.cancel = true
-          this.showReadOnlyNotice()
-        })
-        this.setStatus('protected')
-      }
-      else {
-        this.commandDisposable = this.runtime.univerAPI.addEvent(this.runtime.univerAPI.Event.CommandExecuted, (event) => {
-          if (event.type === CommandType.MUTATION)
-            this.scheduleSave()
-        })
-        this.setStatus('saved')
-      }
+      this.commandDisposable = this.runtime.univerAPI.addEvent(this.runtime.univerAPI.Event.CommandExecuted, (event) => {
+        if (event.type === CommandType.MUTATION)
+          this.scheduleSave()
+      })
+      this.setStatus('saved')
     }
     catch (error) {
       this.disposeEditor()
@@ -189,6 +190,7 @@ export class DocxTypeView extends FileView {
           this.backupCreated = true
         }
         await this.app.vault.modifyBinary(file, output)
+        await pruneBinaryBackups(this.app, file).catch(() => undefined)
         this.lastKnownBuffer = output
         this.baseline = serialized
         this.lastSavedSnapshot = cloneSnapshot(serialized)
@@ -299,6 +301,95 @@ export class DocxTypeView extends FileView {
     new Notice(`This DOCX file is protected because it contains Word features that cannot be saved safely${reasons}.`, 8000)
   }
 
+  private renderProtectedHeader(container: HTMLElement): void {
+    const zh = this.settings.language === 'ZH' || this.settings.language === 'TW'
+    const bar = this.contentEl.createDiv({ cls: 'univer-protected-bar' })
+    const icon = bar.createSpan({ cls: 'univer-protected-bar__icon' })
+    setIcon(icon, 'shield-check')
+    const copy = bar.createDiv({ cls: 'univer-protected-bar__copy' })
+    copy.createEl('strong', { text: zh ? '高保真只读预览' : 'High-fidelity read-only preview' })
+    copy.createSpan({ text: zh ? '复杂 Word 版式已保留，原文件不会被修改' : 'Complex Word layout is preserved; the original file will not be modified' })
+    const editCopy = bar.createEl('button', {
+      cls: 'univer-protected-bar__edit',
+      attr: {
+        type: 'button',
+        title: zh ? '创建可编辑 DOCX 副本' : 'Create an editable DOCX copy',
+      },
+    })
+    const editIcon = editCopy.createSpan()
+    setIcon(editIcon, 'file-pen-line')
+    editCopy.createSpan({ text: zh ? '编辑副本' : 'Edit copy' })
+    editCopy.addEventListener('click', () => {
+      void this.createEditableCopy(editCopy).catch(() => undefined)
+    })
+    const details = bar.createEl('button', {
+      cls: 'clickable-icon univer-protected-bar__details',
+      attr: {
+        'aria-label': zh ? '查看保护视图原因' : 'View protected-view details',
+        'title': zh ? '查看保护视图原因' : 'View protected-view details',
+        'type': 'button',
+      },
+    })
+    setIcon(details, 'info')
+    details.addEventListener('click', () => this.showReadOnlyNotice())
+    container.before(bar)
+  }
+
+  private async createEditableCopy(button: HTMLButtonElement): Promise<void> {
+    if (this.creatingEditableCopy || !this.file)
+      return
+    this.creatingEditableCopy = true
+    button.disabled = true
+    try {
+      const sourceFile = this.file
+      const source = await this.app.vault.readBinary(sourceFile)
+      const documentData = await importDocx(source, `${sourceFile.basename}-editable`)
+      const output = await exportDocx(documentData)
+      const path = await this.nextEditableCopyPath(sourceFile)
+      await this.app.vault.createBinary(path, output)
+      await this.app.workspace.getLeaf(true).setViewState({
+        type: Type,
+        active: true,
+        state: { file: path },
+      })
+      new Notice(`Created editable copy: ${path}`)
+    }
+    catch (error) {
+      new Notice(`Cannot create an editable DOCX copy: ${errorMessage(error)}`, 8000)
+      throw error
+    }
+    finally {
+      this.creatingEditableCopy = false
+      button.disabled = false
+    }
+  }
+
+  private async nextEditableCopyPath(sourceFile: TFile): Promise<string> {
+    const directory = sourceFile.parent?.path
+    for (let index = 0; index < 10000; index++) {
+      const suffix = index === 0 ? '' : `-${index}`
+      const name = `${sourceFile.basename}-editable${suffix}.docx`
+      const path = normalizePath(directory ? `${directory}/${name}` : name)
+      if (!await this.app.vault.adapter.exists(path))
+        return path
+    }
+    throw new Error('Too many editable copies already exist')
+  }
+
+  private createProtectedUniverFallback(container: HTMLElement, documentData: IDocumentData): void {
+    container.addClass('univer-editor-readonly')
+    container.setAttr('aria-readonly', 'true')
+    this.runtime = docInit(container, this.settings)
+    this.runtime.univerAPI.createUniverDoc(documentData)
+    this.themeObserver = observeTheme(this.runtime.univerAPI)
+    this.commandDisposable = this.runtime.univerAPI.addEvent(this.runtime.univerAPI.Event.BeforeCommandExecute, (event) => {
+      if (event.type !== CommandType.MUTATION)
+        return
+      event.cancel = true
+      this.showReadOnlyNotice()
+    })
+  }
+
   private resetState(): void {
     this.disposeEditor()
     this.statusLiveEl = undefined
@@ -312,6 +403,7 @@ export class DocxTypeView extends FileView {
     this.lastKnownBuffer = undefined
     this.protectedReasons = []
     this.lastReadOnlyNoticeAt = 0
+    this.creatingEditableCopy = false
   }
 
   private disposeEditor(): void {

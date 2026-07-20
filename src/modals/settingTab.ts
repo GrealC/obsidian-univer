@@ -59,7 +59,7 @@ export class SettingTab extends PluginSettingTab {
       })
     new Setting(containerEl)
       .setName('Back up Office files')
-      .setDesc('Create one backup before the first save of each Excel or Word editor session')
+      .setDesc('Create a backup before the first save and keep the latest three backups for each Excel or Word file')
       .addToggle((toggle) => {
         toggle
           .setValue(this.plugin.settings.createBackups)

@@ -1,7 +1,7 @@
 {
   "name": "univer-plus",
   "type": "module",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "packageManager": "pnpm@11.9.0",
   "description": "Create, edit, and view spreadsheets and documents in various formats like Excel and Word directly within your knowledge base.",
   "author": "DreamNum",
@@ -41,6 +41,7 @@
     "@univerjs/themes": "0.25.1",
     "@xmldom/xmldom": "^0.9.10",
     "defu": "^6.1.4",
+    "docx-preview": "^0.4.0",
     "exceljs": "^4.4.0",
     "jszip": "^3.10.1",
     "react": "18.3.1",
