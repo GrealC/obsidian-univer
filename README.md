@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/GrealC/obsidian-univer/releases"><img src="https://img.shields.io/github/v/release/GrealC/obsidian-univer?display_name=tag&sort=semver" alt="GitHub release"></a>
+  <a href="https://github.com/GrealC/obsidian-univer/releases"><img src="https://img.shields.io/github/v/release/GrealC/obsidian-univer?display_name=tag" alt="GitHub release"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/github/license/GrealC/obsidian-univer" alt="License"></a>
   <a href="https://github.com/GrealC/obsidian-univer/actions/workflows/test.yml"><img src="https://github.com/GrealC/obsidian-univer/actions/workflows/test.yml/badge.svg" alt="Test status"></a>
 </p>
