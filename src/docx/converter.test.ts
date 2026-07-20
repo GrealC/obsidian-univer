@@ -40,4 +40,18 @@ describe('local docx converter', () => {
     expect(imported.body?.dataStream).toBe(data.body.dataStream)
     expect(imported.body?.textRuns?.[0]).toMatchObject({ st: 0, ed: 5, ts: { bl: BooleanNumber.TRUE, ff: 'Microsoft YaHei' } })
   })
+
+  it('keeps document-default fonts visible and preserves supported highlights', async () => {
+    const zip = await JSZip.loadAsync(await createEmptyDocx('Defaults'))
+    zip.file('word/styles.xml', `<?xml version="1.0"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:eastAsia="Microsoft YaHei"/><w:sz w:val="24"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`)
+    zip.file('word/document.xml', `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:t>Highlighted</w:t></w:r></w:p><w:sectPr/></w:body></w:document>`)
+
+    const source = await zip.generateAsync({ type: 'arraybuffer' })
+    const imported = await importDocx(source, 'Defaults')
+    expect(imported.body?.textRuns?.[0]?.ts).toMatchObject({ ff: 'Microsoft YaHei', fs: 12, bg: { rgb: '#FFFF00' } })
+
+    const output = await exportDocx(imported, source)
+    const xml = await (await JSZip.loadAsync(output)).file('word/document.xml')?.async('text')
+    expect(xml).toContain('<w:highlight w:val="yellow"/>')
+  })
 })

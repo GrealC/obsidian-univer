@@ -33,6 +33,9 @@ const unsupportedDocumentMarkup: Array<[RegExp, string]> = [
   [/<w:(?:sym|cr)\b/i, 'special Word characters'],
   [/<w:(?:tabs|pBdr|pageBreakBefore|textDirection|bidi)\b/i, 'advanced paragraph formatting'],
   [/<w:(?:vanish|webHidden|outline|shadow|emboss|imprint|smallCaps|caps)\b/i, 'advanced text effects'],
+  [/<w:(?:dstrike|bCs|iCs|rtl|cs|em|fitText|kern|position|spacing|w|eastAsianLayout)\b/i, 'advanced run formatting'],
+  [/<w:(?:shd|lang|rPrChange|pPrChange)\b/i, 'formatting that cannot be written safely'],
+  [/<w:spacing[^>]*w:lineRule\s*=\s*["'](?!(?:auto|atLeast)["'])/i, 'exact paragraph line spacing'],
   [/<w:sectPr(?:\s[^>]*)?>[\s\S]*?<w:(?:cols|pgBorders|lnNumType)\b/i, 'advanced section layout'],
 ]
 

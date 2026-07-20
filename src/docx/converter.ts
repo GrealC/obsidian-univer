@@ -28,6 +28,7 @@ const HIGHLIGHT_COLORS: Record<string, string> = {
   white: '#FFFFFF',
   yellow: '#FFFF00',
 }
+const HIGHLIGHT_NAMES_BY_COLOR = new Map(Object.entries(HIGHLIGHT_COLORS).map(([name, color]) => [color, name]))
 
 export async function createEmptyDocx(title = 'Untitled'): Promise<ArrayBuffer> {
   const snapshot = createEmptyDocument(title)
@@ -50,6 +51,7 @@ export async function importDocx(buffer: ArrayBuffer, title: string): Promise<ID
     throw new Error('The DOCX document body is invalid')
 
   const documentData = createEmptyDocument(title)
+  const defaults = readDocumentDefaults(await zip.file('word/styles.xml')?.async('text'))
   const paragraphs = descendants(bodyElement, 'p')
   let dataStream = ''
   const textRuns: ITextRun[] = []
@@ -62,14 +64,14 @@ export async function importDocx(buffer: ArrayBuffer, title: string): Promise<ID
         continue
       const start = dataStream.length
       dataStream += text
-      const style = readRunStyle(run)
+      const style = { ...defaults.run, ...readRunStyle(run) }
       if (Object.keys(style).length > 0)
         textRuns.push({ st: start, ed: dataStream.length, ts: style })
     }
     dataStream += '\r'
     paragraphData.push({
       startIndex: dataStream.length - 1,
-      paragraphStyle: readParagraphStyle(paragraph),
+      paragraphStyle: { ...defaults.paragraph, ...readParagraphStyle(paragraph) },
     })
   }
 
@@ -146,7 +148,10 @@ function readRunText(run: XmlElement): string {
 }
 
 function readRunStyle(run: XmlElement): ITextStyle {
-  const properties = firstElement(run, 'rPr')
+  return readRunProperties(firstElement(run, 'rPr'))
+}
+
+function readRunProperties(properties: XmlElement | undefined): ITextStyle {
   if (!properties)
     return {}
 
@@ -187,7 +192,10 @@ function readRunStyle(run: XmlElement): ITextStyle {
 }
 
 function readParagraphStyle(paragraph: XmlElement): IParagraphStyle {
-  const properties = firstElement(paragraph, 'pPr')
+  return readParagraphProperties(firstElement(paragraph, 'pPr'))
+}
+
+function readParagraphProperties(properties: XmlElement | undefined): IParagraphStyle {
   if (!properties)
     return {}
   const style: IParagraphStyle = {}
@@ -238,6 +246,18 @@ function readParagraphStyle(paragraph: XmlElement): IParagraphStyle {
   if (firstElement(properties, 'keepLines'))
     style.keepLines = BooleanNumber.TRUE
   return style
+}
+
+function readDocumentDefaults(stylesXml: string | undefined): { run: ITextStyle, paragraph: IParagraphStyle } {
+  if (!stylesXml)
+    return { run: {}, paragraph: {} }
+
+  const styles = new DOMParser().parseFromString(stylesXml, 'application/xml')
+  const defaults = firstElement(styles.documentElement, 'docDefaults')
+  return {
+    run: readRunProperties(firstElement(firstElement(defaults, 'rPrDefault'), 'rPr')),
+    paragraph: readParagraphProperties(firstElement(firstElement(defaults, 'pPrDefault'), 'pPr')),
+  }
 }
 
 function readSectionStyle(body: XmlElement): IDocumentData['documentStyle'] {
@@ -354,6 +374,9 @@ function writeRunProperties(style?: ITextStyle): string {
   const color = style.cl?.rgb?.replace('#', '')
   if (color)
     values.push(`<w:color w:val="${escapeAttribute(color.toUpperCase())}"/>`)
+  const highlight = style.bg?.rgb && HIGHLIGHT_NAMES_BY_COLOR.get(style.bg.rgb.toUpperCase())
+  if (highlight)
+    values.push(`<w:highlight w:val="${highlight}"/>`)
   if (style.va === BaselineOffset.SUPERSCRIPT)
     values.push('<w:vertAlign w:val="superscript"/>')
   else if (style.va === BaselineOffset.SUBSCRIPT)

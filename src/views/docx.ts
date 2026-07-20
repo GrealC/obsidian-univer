@@ -10,6 +10,7 @@ import { renderDocxPreview } from '@/docx/preview'
 import { assertSafeDocumentTransition } from '@/docx/safety'
 import { uiText } from '@/i18n'
 import { createBinaryBackup, pruneBinaryBackups } from '@/services/backup'
+import { hasUnsavedSnapshot, isOfficeSaveShortcut } from '@/services/officeSave'
 import { SaveCoordinator } from '@/services/saveCoordinator'
 import { docInit } from '@/univer/docs'
 import { observeTheme } from '@/univer/theme'
@@ -40,9 +41,11 @@ export class DocxTypeView extends FileView {
   private baseline = ''
   private lastSavedSnapshot?: IDocumentData
   private pendingDestructiveSnapshot?: string
+  private loadedFile?: TFile
   private fileDeleted = false
   private readOnly = false
-  private backupCreated = false
+  private readonly knownBuffers = new Map<string, ArrayBuffer>()
+  private readonly backedUpFiles = new Set<string>()
   private lastKnownBuffer?: ArrayBuffer
   private protectedReasons: string[] = []
   private lastReadOnlyNoticeAt = 0
@@ -74,21 +77,29 @@ export class DocxTypeView extends FileView {
   async onOpen(): Promise<void> {
     this.ensureStatusAction()
     this.registerEvent(this.app.vault.on('delete', (file) => {
-      if (file === this.file)
+      if (file.path === this.loadedFile?.path)
         this.fileDeleted = true
     }))
     this.registerDomEvent(window, 'keydown', (event) => {
-      const isSave = (event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's'
-      if (!isSave || this.app.workspace.getActiveViewOfType(DocxTypeView) !== this)
+      if (!isOfficeSaveShortcut(event) || this.app.workspace.activeLeaf?.view !== this)
         return
       event.preventDefault()
       void this.saveNow('manual').catch(() => undefined)
-    })
+    }, { capture: true })
   }
 
   async onLoadFile(file: TFile): Promise<void> {
+    const previousFile = this.loadedFile
+    if (previousFile && previousFile.path !== file.path) {
+      if (this.runtime && !this.fileDeleted)
+        await this.saveNow('close', previousFile).catch(() => undefined)
+      this.knownBuffers.delete(previousFile.path)
+      this.backedUpFiles.delete(previousFile.path)
+    }
+
     await super.onLoadFile(file)
     this.resetState()
+    this.loadedFile = file
     this.contentEl.empty()
     this.contentEl.addClass('univer-view', 'univer-office-view', 'univer-docx-view')
 
@@ -106,6 +117,8 @@ export class DocxTypeView extends FileView {
     try {
       const raw = await this.app.vault.readBinary(file)
       this.lastKnownBuffer = raw
+      this.knownBuffers.set(file.path, raw)
+      this.backedUpFiles.delete(file.path)
       const inspection = await inspectDocx(raw)
       this.readOnly = inspection.readOnly
       this.protectedReasons = inspection.reasons
@@ -134,10 +147,7 @@ export class DocxTypeView extends FileView {
       const initialSnapshot = this.runtime.univerAPI.getActiveDocument()?.getSnapshot()
       this.baseline = initialSnapshot ? JSON.stringify(initialSnapshot) : ''
       this.lastSavedSnapshot = this.baseline ? cloneSnapshot(this.baseline) : undefined
-      this.commandDisposable = this.runtime.univerAPI.addEvent(this.runtime.univerAPI.Event.CommandExecuted, (event) => {
-        if (event.type === CommandType.MUTATION)
-          this.scheduleSave()
-      })
+      this.commandDisposable = this.runtime.univerAPI.addEvent(this.runtime.univerAPI.Event.CommandExecuted, () => this.scheduleSave())
       this.setStatus('saved')
     }
     catch (error) {
@@ -149,15 +159,21 @@ export class DocxTypeView extends FileView {
   }
 
   async onUnloadFile(file: TFile): Promise<void> {
+    const unloadedRuntime = this.runtime
     try {
       if (!this.fileDeleted)
-        await this.saveNow('close')
+        await this.saveNow('close', file)
     }
     catch {
       // saveNow reports the error and leaves the original file untouched.
     }
     finally {
-      this.disposeEditor()
+      if (this.loadedFile?.path === file.path && this.runtime === unloadedRuntime) {
+        this.disposeEditor()
+        this.loadedFile = undefined
+        this.knownBuffers.delete(file.path)
+        this.backedUpFiles.delete(file.path)
+      }
       await super.onUnloadFile(file)
     }
   }
@@ -165,60 +181,83 @@ export class DocxTypeView extends FileView {
   async onClose(): Promise<void> {
     if (this.autosaveTimer !== undefined)
       window.clearTimeout(this.autosaveTimer)
-    await this.saveCoordinator.flush()
-    this.disposeEditor()
-    this.saveCoordinator.dispose()
+    try {
+      if (!this.fileDeleted)
+        await this.saveNow('close')
+    }
+    catch {
+      // saveNow already reports the error and leaves the original file untouched.
+    }
+    finally {
+      await this.saveCoordinator.flush()
+      this.disposeEditor()
+      this.saveCoordinator.dispose()
+    }
   }
 
-  async saveNow(reason: 'auto' | 'manual' | 'close'): Promise<boolean> {
-    if (!this.runtime || !this.file || this.readOnly || this.fileDeleted) {
+  async saveNow(reason: 'auto' | 'manual' | 'close', targetFile = this.loadedFile): Promise<boolean> {
+    const runtime = this.runtime
+    if (!runtime || !targetFile || targetFile.path !== this.loadedFile?.path || this.readOnly || this.fileDeleted) {
       if (reason === 'manual' && this.readOnly)
         this.showReadOnlyNotice()
       return false
     }
 
-    return this.saveCoordinator.run(async () => {
-      const file = this.file
-      if (!file || this.fileDeleted)
-        return false
+    const snapshot = runtime.univerAPI.getActiveDocument()?.getSnapshot()
+    if (!snapshot)
+      return false
+    const serialized = JSON.stringify(snapshot)
+    if (serialized === this.baseline) {
+      this.pendingDestructiveSnapshot = undefined
+      this.setStatus('saved')
+      return false
+    }
+    this.assertSafeTransition(snapshot, serialized, reason)
+
+    const sessionBuffer = this.lastKnownBuffer
+
+    return this.saveCoordinator.runDeduplicated(targetFile.path, serialized, async () => {
+      const file = targetFile
+      const isCurrentSession = () => this.runtime === runtime && this.loadedFile?.path === file.path
       try {
-        const snapshot = this.runtime?.univerAPI.getActiveDocument()?.getSnapshot()
-        if (!snapshot)
-          return false
-        const serialized = JSON.stringify(snapshot)
-        if (serialized === this.baseline) {
+        if (isCurrentSession() && serialized === this.baseline) {
           this.pendingDestructiveSnapshot = undefined
           this.setStatus('saved')
           return false
         }
-        this.assertSafeTransition(snapshot, serialized, reason)
 
         const current = await this.app.vault.readBinary(file)
-        if (!this.lastKnownBuffer || !buffersEqual(current, this.lastKnownBuffer))
+        const expectedBuffer = this.knownBuffers.get(file.path) ?? sessionBuffer
+        if (!expectedBuffer || !buffersEqual(current, expectedBuffer))
           throw new Error('The file changed outside this editor. Reopen it before saving to avoid overwriting external changes.')
 
-        this.setStatus('saving')
+        if (isCurrentSession())
+          this.setStatus('saving')
         const output = await exportDocx(snapshot, current)
         const latest = await this.app.vault.readBinary(file)
         if (!buffersEqual(current, latest))
           throw new Error('The file changed while it was being exported. Reopen it before saving.')
-        if (this.settings.createBackups && !this.backupCreated) {
+        if (this.settings.createBackups && !this.backedUpFiles.has(file.path)) {
           await createBinaryBackup(this.app, file, latest)
-          this.backupCreated = true
+          this.backedUpFiles.add(file.path)
         }
         await this.app.vault.modifyBinary(file, output)
         await pruneBinaryBackups(this.app, file).catch(() => undefined)
-        this.lastKnownBuffer = output
-        this.baseline = serialized
-        this.lastSavedSnapshot = cloneSnapshot(serialized)
-        this.pendingDestructiveSnapshot = undefined
-        this.setStatus('saved')
+        this.knownBuffers.set(file.path, output)
+        if (isCurrentSession()) {
+          this.lastKnownBuffer = output
+          this.baseline = serialized
+          this.lastSavedSnapshot = cloneSnapshot(serialized)
+          this.pendingDestructiveSnapshot = undefined
+          this.setStatus('saved')
+        }
         if (reason === 'manual')
           new Notice(`${file.name} saved`)
         return true
       }
       catch (error) {
-        this.setStatus('error')
+        if (isCurrentSession())
+          this.setStatus('error')
         new Notice(`Cannot save ${file.name}: ${errorMessage(error)}`, 8000)
         throw error
       }
@@ -226,6 +265,8 @@ export class DocxTypeView extends FileView {
   }
 
   private scheduleSave(): void {
+    if (!hasUnsavedSnapshot(this.getSnapshot(), this.baseline))
+      return
     if (this.autosaveTimer !== undefined)
       window.clearTimeout(this.autosaveTimer)
     this.setStatus('dirty')
@@ -233,6 +274,10 @@ export class DocxTypeView extends FileView {
       this.autosaveTimer = undefined
       void this.saveNow('auto').catch(() => undefined)
     }, AUTO_SAVE_DELAY)
+  }
+
+  private getSnapshot(): IDocumentData | undefined {
+    return this.runtime?.univerAPI.getActiveDocument()?.getSnapshot()
   }
 
   private assertSafeTransition(snapshot: IDocumentData, serialized: string, reason: 'auto' | 'manual' | 'close'): void {
@@ -411,9 +456,9 @@ export class DocxTypeView extends FileView {
     this.baseline = ''
     this.lastSavedSnapshot = undefined
     this.pendingDestructiveSnapshot = undefined
+    this.loadedFile = undefined
     this.fileDeleted = false
     this.readOnly = false
-    this.backupCreated = false
     this.lastKnownBuffer = undefined
     this.protectedReasons = []
     this.lastReadOnlyNoticeAt = 0

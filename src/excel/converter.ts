@@ -1,4 +1,4 @@
-import type { ICellData, IColorStyle, IStyleData, IWorkbookData, IWorksheetData, LocaleType } from '@univerjs/core'
+import type { ICellData, IColorStyle, IColumnData, IRowData, IStyleData, ITextRun, IWorkbookData, IWorksheetData, LocaleType } from '@univerjs/core'
 import type {
   Border,
   Borders,
@@ -10,6 +10,7 @@ import type {
   Font,
   HeaderFooter,
   PageSetup,
+  RichText,
   TableColumnProperties,
   TableStyleProperties,
   Worksheet,
@@ -18,13 +19,16 @@ import {
   BooleanNumber,
   BorderStyleTypes,
   CellValueType,
+  composeStyles,
   CustomRangeType,
   HorizontalAlign,
   TextDecoration,
   VerticalAlign,
   WrapStrategy,
 } from '@univerjs/core'
+import { DOMParser } from '@xmldom/xmldom'
 import ExcelJS from 'exceljs'
+import JSZip from 'jszip'
 import { validateXlsxBuffer } from './capabilities'
 import { normalizeXlsxForExcelJs } from './compatibility'
 import { workbookMetrics } from './safety'
@@ -33,6 +37,8 @@ const DEFAULT_ROW_COUNT = 100
 const DEFAULT_COLUMN_COUNT = 26
 const DEFAULT_ROW_HEIGHT = 24
 const DEFAULT_COLUMN_WIDTH = 88
+export const LIGHT_GRIDLINES_COLOR = '#D6D8DB'
+export const DARK_GRIDLINES_COLOR = '#4E5565'
 const UNSUPPORTED_RESOURCE_NAMES = new Set([
   'SHEET_CONDITIONAL_FORMATTING_PLUGIN',
   'SHEET_DATA_VALIDATION_PLUGIN',
@@ -77,6 +83,9 @@ interface ExcelTableModel {
 interface ExcelWorkbookMetadata {
   definedNames?: DefinedNamesModel
 }
+
+type ExcelStyleSource = Pick<Cell, 'alignment' | 'border' | 'fill' | 'font' | 'numFmt'>
+type XmlElement = NonNullable<ReturnType<DOMParser['parseFromString']>['documentElement']>
 
 function createId(prefix: string): string {
   const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -123,13 +132,8 @@ function borderToUniver(border?: Partial<Border>) {
   }
 }
 
-function excelStyleToUniver(cell: Cell): IStyleData | undefined {
-  const font = cell.font
-  const fill = cell.fill
-  const alignment = cell.alignment
-  const border = cell.border
+function excelFontToUniver(font?: Partial<Font>): IStyleData {
   const style: IStyleData = {}
-
   if (font?.name)
     style.ff = font.name
   if (font?.size)
@@ -148,11 +152,24 @@ function excelStyleToUniver(cell: Cell): IStyleData | undefined {
     style.st = { s: BooleanNumber.TRUE }
   style.cl = colorToUniver(font?.color)
 
+  for (const key of Object.keys(style) as Array<keyof IStyleData>) {
+    if (style[key] === undefined)
+      delete style[key]
+  }
+  return style
+}
+
+function excelStyleToUniver(source: ExcelStyleSource): IStyleData | undefined {
+  const fill = source.fill
+  const alignment = source.alignment
+  const border = source.border
+  const style = excelFontToUniver(source.font)
+
   if (fill?.type === 'pattern' && fill.pattern === 'solid')
     style.bg = colorToUniver(fill.fgColor)
 
-  if (cell.numFmt && cell.numFmt !== 'General')
-    style.n = { pattern: cell.numFmt }
+  if (source.numFmt && source.numFmt !== 'General')
+    style.n = { pattern: source.numFmt }
 
   const horizontal = { left: HorizontalAlign.LEFT, center: HorizontalAlign.CENTER, right: HorizontalAlign.RIGHT, justify: HorizontalAlign.JUSTIFIED, distributed: HorizontalAlign.DISTRIBUTED }
   const vertical = { top: VerticalAlign.TOP, middle: VerticalAlign.MIDDLE, bottom: VerticalAlign.BOTTOM, justify: VerticalAlign.MIDDLE, distributed: VerticalAlign.MIDDLE }
@@ -179,6 +196,90 @@ function excelStyleToUniver(cell: Cell): IStyleData | undefined {
       delete style[key]
   }
   return Object.keys(style).length > 0 ? style : undefined
+}
+
+function registerStyle(styles: Record<string, IStyleData>, styleIds: Map<string, string>, style?: IStyleData): string | undefined {
+  if (!style)
+    return undefined
+  const key = JSON.stringify(style)
+  const existing = styleIds.get(key)
+  if (existing)
+    return existing
+  const styleId = `style-${styleIds.size + 1}`
+  styleIds.set(key, styleId)
+  styles[styleId] = style
+  return styleId
+}
+
+async function readDefaultCellStyle(buffer: ArrayBuffer): Promise<IStyleData | undefined> {
+  const zip = await JSZip.loadAsync(buffer)
+  const xml = await zip.file('xl/styles.xml')?.async('text')
+  if (!xml)
+    return undefined
+
+  const document = new DOMParser().parseFromString(xml, 'application/xml')
+  if (document.getElementsByTagName('parsererror').length > 0)
+    return undefined
+  const fonts = directChildren(firstDescendant(document.documentElement, 'fonts'), 'font')
+  const firstCellFormat = directChildren(firstDescendant(document.documentElement, 'cellXfs'), 'xf')[0]
+  const fontId = Number(firstCellFormat?.getAttribute('fontId') ?? 0)
+  const fontElement = fonts[fontId]
+  if (!fontElement)
+    return undefined
+
+  const font: Partial<Font> = {}
+  const name = firstDescendant(fontElement, 'name')?.getAttribute('val')
+  const size = Number(firstDescendant(fontElement, 'sz')?.getAttribute('val'))
+  const color = firstDescendant(fontElement, 'color')?.getAttribute('rgb')
+  if (name)
+    font.name = name
+  if (Number.isFinite(size) && size > 0)
+    font.size = size
+  if (color)
+    font.color = { argb: color }
+  if (firstDescendant(fontElement, 'b'))
+    font.bold = true
+  if (firstDescendant(fontElement, 'i'))
+    font.italic = true
+  if (firstDescendant(fontElement, 'strike'))
+    font.strike = true
+  if (firstDescendant(fontElement, 'u'))
+    font.underline = firstDescendant(fontElement, 'u')?.getAttribute('val') === 'double' ? 'double' : true
+
+  const style = excelFontToUniver(font)
+  return Object.keys(style).length > 0 ? style : undefined
+}
+
+function firstDescendant(element: XmlElement | null | undefined, localName: string): XmlElement | undefined {
+  if (!element)
+    return undefined
+  for (let index = 0; index < element.childNodes.length; index++) {
+    const child = element.childNodes.item(index)
+    if (child?.nodeType !== 1)
+      continue
+    const childElement = child as XmlElement
+    if (childElement.localName === localName || childElement.nodeName === localName)
+      return childElement
+    const nested = firstDescendant(childElement, localName)
+    if (nested)
+      return nested
+  }
+  return undefined
+}
+
+function directChildren(element: XmlElement | null | undefined, localName: string): XmlElement[] {
+  if (!element)
+    return []
+  const children: XmlElement[] = []
+  for (let index = 0; index < element.childNodes.length; index++) {
+    const child = element.childNodes.item(index)
+    if (child?.nodeType !== 1)
+      continue
+    const childElement = child as XmlElement
+    if (childElement.localName === localName || childElement.nodeName === localName)
+      children.push(childElement)
+  }
+  return children
 }
 
 function primitiveValue(value: unknown): string | number | boolean | undefined {
@@ -232,6 +333,25 @@ function excelCellToUniver(cell: Cell, styleId?: string): ICellData | undefined 
   else if (value && typeof value === 'object' && 'richText' in value) {
     data.v = value.richText.map(part => part.text).join('')
     data.t = CellValueType.STRING
+    const textRuns: ITextRun[] = []
+    let offset = 0
+    for (const part of value.richText) {
+      const start = offset
+      offset += part.text.length
+      const style = excelFontToUniver(part.font)
+      if (Object.keys(style).length > 0 && start < offset)
+        textRuns.push({ st: start, ed: offset, ts: style })
+    }
+    data.p = {
+      id: createId('rich-text'),
+      documentStyle: {},
+      body: {
+        dataStream: `${data.v}\r\n`,
+        textRuns,
+        paragraphs: [{ startIndex: offset }],
+        sectionBreaks: [{ startIndex: offset + 1 }],
+      },
+    }
   }
   else if (value && typeof value === 'object' && 'hyperlink' in value) {
     data.v = value.text
@@ -291,33 +411,29 @@ function worksheetTableMetadata(worksheet: Worksheet): ExcelTableMetadata[] {
   })
 }
 
-function worksheetToUniver(worksheet: Worksheet, styles: Record<string, IStyleData>): Partial<IWorksheetData> {
+function worksheetToUniver(
+  worksheet: Worksheet,
+  styles: Record<string, IStyleData>,
+  styleIds: Map<string, string>,
+  defaultStyleId: string | undefined,
+  gridlinesColor: string,
+): Partial<IWorksheetData> {
   const cellData: Record<number, Record<number, ICellData>> = {}
-  const rowData: Record<number, { h?: number, hd?: BooleanNumber }> = {}
-  const columnData: Record<number, { w?: number, hd?: BooleanNumber }> = {}
-  const styleIds = new Map<string, string>()
+  const rowData: Record<number, Partial<IRowData>> = {}
+  const columnData: Record<number, Partial<IColumnData>> = {}
 
   worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-    if (row.height || row.hidden) {
+    const rowStyleId = registerStyle(styles, styleIds, excelStyleToUniver(row as unknown as ExcelStyleSource))
+    if (row.height || row.hidden || rowStyleId) {
       rowData[rowNumber - 1] = {
         h: row.height ? row.height * 96 / 72 : undefined,
         hd: row.hidden ? BooleanNumber.TRUE : undefined,
+        s: rowStyleId,
       }
     }
 
     row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
-      const style = excelStyleToUniver(cell)
-      let styleId: string | undefined
-      if (style) {
-        const key = JSON.stringify(style)
-        styleId = styleIds.get(key)
-        if (!styleId) {
-          styleId = `style-${styleIds.size + 1}`
-          styleIds.set(key, styleId)
-          styles[styleId] = style
-        }
-      }
-
+      const styleId = registerStyle(styles, styleIds, excelStyleToUniver(cell))
       const converted = excelCellToUniver(cell, styleId)
       if (converted) {
         cellData[rowNumber - 1] ??= {}
@@ -328,10 +444,12 @@ function worksheetToUniver(worksheet: Worksheet, styles: Record<string, IStyleDa
 
   const columns = worksheet.columns ?? []
   columns.forEach((column, index) => {
-    if (column.width || column.hidden) {
+    const columnStyleId = registerStyle(styles, styleIds, excelStyleToUniver(column as unknown as ExcelStyleSource))
+    if (column.width || column.hidden || columnStyleId) {
       columnData[index] = {
         w: column.width ? Math.max(10, column.width * 7 + 5) : undefined,
         hd: column.hidden ? BooleanNumber.TRUE : undefined,
+        s: columnStyleId,
       }
     }
   })
@@ -354,6 +472,7 @@ function worksheetToUniver(worksheet: Worksheet, styles: Record<string, IStyleDa
     columnCount,
     defaultColumnWidth: DEFAULT_COLUMN_WIDTH,
     defaultRowHeight: DEFAULT_ROW_HEIGHT,
+    defaultStyle: defaultStyleId,
     mergeData: (worksheet.model.merges ?? []).map(parseRange),
     cellData,
     rowData,
@@ -361,6 +480,7 @@ function worksheetToUniver(worksheet: Worksheet, styles: Record<string, IStyleDa
     rowHeader: { width: 46 },
     columnHeader: { height: 20 },
     showGridlines: views[0]?.showGridLines === false ? BooleanNumber.FALSE : BooleanNumber.TRUE,
+    gridlinesColor,
     rightToLeft: views[0]?.rightToLeft ? BooleanNumber.TRUE : BooleanNumber.FALSE,
     custom: {
       excel: {
@@ -375,21 +495,25 @@ function worksheetToUniver(worksheet: Worksheet, styles: Record<string, IStyleDa
   }
 }
 
-export async function importXlsx(buffer: ArrayBuffer, name: string, locale: LocaleType): Promise<IWorkbookData> {
+export async function importXlsx(buffer: ArrayBuffer, name: string, locale: LocaleType, gridlinesColor = LIGHT_GRIDLINES_COLOR): Promise<IWorkbookData> {
   const workbook = new ExcelJS.Workbook()
+  let defaultStyle: IStyleData | undefined
   if (buffer.byteLength > 0) {
     const compatibleBuffer = await normalizeXlsxForExcelJs(buffer)
+    defaultStyle = await readDefaultCellStyle(compatibleBuffer)
     await workbook.xlsx.load(new Uint8Array(compatibleBuffer) as unknown as ExcelJS.Buffer)
   }
   if (workbook.worksheets.length === 0)
     workbook.addWorksheet('Sheet1')
 
   const styles: Record<string, IStyleData> = {}
+  const styleIds = new Map<string, string>()
+  const defaultStyleId = registerStyle(styles, styleIds, defaultStyle)
   const sheets: IWorkbookData['sheets'] = {}
   const sheetOrder: string[] = []
 
   for (const worksheet of workbook.worksheets) {
-    const sheet = worksheetToUniver(worksheet, styles)
+    const sheet = worksheetToUniver(worksheet, styles, styleIds, defaultStyleId, gridlinesColor)
     const sheetId = sheet.id!
     sheetOrder.push(sheetId)
     sheets[sheetId] = sheet
@@ -444,22 +568,36 @@ function univerBorderToExcel(border?: { s: BorderStyleTypes, cl: IColorStyle } |
     : { style: univerBorderStyle(border.s) }
 }
 
-function applyUniverStyle(cell: Cell, style?: IStyleData | null): void {
-  if (!style)
-    return
+function hasOwnStyle(style: IStyleData, keys: Array<keyof IStyleData>): boolean {
+  return keys.some(key => Object.prototype.hasOwnProperty.call(style, key))
+}
 
-  const font: Partial<Font> = {
-    name: style.ff ?? undefined,
-    size: style.fs,
-    bold: style.bl === BooleanNumber.TRUE,
-    italic: style.it === BooleanNumber.TRUE,
-    underline: style.ul?.s === BooleanNumber.TRUE ? style.ul.t === TextDecoration.DOUBLE ? 'double' : true : undefined,
-    strike: style.st?.s === BooleanNumber.TRUE,
-  }
+function univerFont(style: IStyleData): Partial<Font> {
+  const font: Partial<Font> = {}
+  if (Object.prototype.hasOwnProperty.call(style, 'ff'))
+    font.name = style.ff ?? undefined
+  if (Object.prototype.hasOwnProperty.call(style, 'fs'))
+    font.size = style.fs
+  if (Object.prototype.hasOwnProperty.call(style, 'bl'))
+    font.bold = style.bl === BooleanNumber.TRUE
+  if (Object.prototype.hasOwnProperty.call(style, 'it'))
+    font.italic = style.it === BooleanNumber.TRUE
+  if (Object.prototype.hasOwnProperty.call(style, 'ul'))
+    font.underline = style.ul?.s === BooleanNumber.TRUE ? style.ul.t === TextDecoration.DOUBLE ? 'double' : true : false
+  if (Object.prototype.hasOwnProperty.call(style, 'st'))
+    font.strike = style.st?.s === BooleanNumber.TRUE
   const fontColor = rgbToArgb(style.cl)
   if (fontColor)
     font.color = { argb: fontColor }
-  cell.font = font as Font
+  return font
+}
+
+function applyUniverStyle(cell: ExcelStyleSource, style?: IStyleData | null): void {
+  if (!style)
+    return
+
+  if (hasOwnStyle(style, ['ff', 'fs', 'bl', 'it', 'ul', 'st', 'cl']))
+    cell.font = univerFont(style) as Font
 
   const background = rgbToArgb(style.bg)
   if (background) {
@@ -473,21 +611,23 @@ function applyUniverStyle(cell: Cell, style?: IStyleData | null): void {
   if (style.n?.pattern)
     cell.numFmt = style.n.pattern
 
-  const horizontal = { [HorizontalAlign.LEFT]: 'left', [HorizontalAlign.CENTER]: 'center', [HorizontalAlign.RIGHT]: 'right', [HorizontalAlign.JUSTIFIED]: 'justify', [HorizontalAlign.DISTRIBUTED]: 'distributed' } as const
-  const vertical = { [VerticalAlign.TOP]: 'top', [VerticalAlign.MIDDLE]: 'middle', [VerticalAlign.BOTTOM]: 'bottom' } as const
-  cell.alignment = {
-    horizontal: style.ht ? horizontal[style.ht as keyof typeof horizontal] : undefined,
-    vertical: style.vt ? vertical[style.vt as keyof typeof vertical] : undefined,
-    wrapText: style.tb === WrapStrategy.WRAP,
-    textRotation: style.tr?.a,
+  if (hasOwnStyle(style, ['ht', 'vt', 'tb', 'tr'])) {
+    const horizontal = { [HorizontalAlign.LEFT]: 'left', [HorizontalAlign.CENTER]: 'center', [HorizontalAlign.RIGHT]: 'right', [HorizontalAlign.JUSTIFIED]: 'justify', [HorizontalAlign.DISTRIBUTED]: 'distributed' } as const
+    const vertical = { [VerticalAlign.TOP]: 'top', [VerticalAlign.MIDDLE]: 'middle', [VerticalAlign.BOTTOM]: 'bottom' } as const
+    cell.alignment = {
+      horizontal: style.ht ? horizontal[style.ht as keyof typeof horizontal] : undefined,
+      vertical: style.vt ? vertical[style.vt as keyof typeof vertical] : undefined,
+      wrapText: style.tb === WrapStrategy.WRAP,
+      textRotation: style.tr?.a,
+    }
   }
 
-  if (style.bd) {
+  if (Object.prototype.hasOwnProperty.call(style, 'bd')) {
     cell.border = {
-      top: univerBorderToExcel(style.bd.t),
-      right: univerBorderToExcel(style.bd.r),
-      bottom: univerBorderToExcel(style.bd.b),
-      left: univerBorderToExcel(style.bd.l),
+      top: univerBorderToExcel(style.bd?.t),
+      right: univerBorderToExcel(style.bd?.r),
+      bottom: univerBorderToExcel(style.bd?.b),
+      left: univerBorderToExcel(style.bd?.l),
     } as Borders
   }
 }
@@ -497,11 +637,43 @@ function getCellText(cell: ICellData): string | undefined {
   return dataStream?.replace(/\r\n$/, '')
 }
 
+function getCellRichText(cell: ICellData): RichText[] | undefined {
+  const text = getCellText(cell)
+  const textRuns = cell.p?.body?.textRuns
+  if (text === undefined || !textRuns?.length)
+    return undefined
+
+  const boundaries = new Set([0, text.length])
+  for (const run of textRuns) {
+    const start = Math.max(0, Math.min(text.length, run.st))
+    const end = Math.max(start, Math.min(text.length, run.ed))
+    boundaries.add(start)
+    boundaries.add(end)
+  }
+
+  const points = [...boundaries].sort((left, right) => left - right)
+  const richText: RichText[] = []
+  for (let index = 0; index < points.length - 1; index++) {
+    const start = points[index]
+    const end = points[index + 1]
+    if (start === end)
+      continue
+    const run = textRuns.find(candidate => candidate.st <= start && candidate.ed >= end)
+    const font = run?.ts ? univerFont(run.ts) : undefined
+    richText.push({
+      text: text.slice(start, end),
+      ...(font && Object.keys(font).length > 0 ? { font } : {}),
+    })
+  }
+  return richText.length > 0 ? richText : undefined
+}
+
 function applyUniverCell(cell: Cell, data: ICellData): void {
   const metadata = data.custom?.excel as ExcelCellMetadata | undefined
   const value = data.v ?? getCellText(data)
   const richTextHyperlink = data.p?.body?.customRanges?.find(range => range.rangeType === CustomRangeType.HYPERLINK)
   const richTextHyperlinkUrl = richTextHyperlink?.properties?.url
+  const richText = getCellRichText(data)
 
   if (data.f) {
     cell.value = {
@@ -517,6 +689,9 @@ function applyUniverCell(cell: Cell, data: ICellData): void {
   }
   else if (metadata?.error) {
     cell.value = { error: metadata.error as ExcelJS.CellErrorValue['error'] }
+  }
+  else if (richText) {
+    cell.value = { richText }
   }
   else if (metadata?.date && typeof value === 'number') {
     cell.value = excelSerialToDate(value)
@@ -534,8 +709,15 @@ function resolveStyle(workbook: IWorkbookData, cell: ICellData): IStyleData | un
   return cell.s
 }
 
+function resolveStyleReference(workbook: IWorkbookData, style: IStyleData | string | null | void): IStyleData | undefined {
+  if (!style)
+    return undefined
+  return typeof style === 'string' ? workbook.styles[style] ?? undefined : style
+}
+
 function applyWorksheetData(excelWorksheet: Worksheet, workbook: IWorkbookData, sheet: Partial<IWorksheetData>): void {
   const metadata = getExcelWorksheetMetadata(sheet)
+  const defaultStyle = resolveStyleReference(workbook, sheet.defaultStyle)
   if (metadata?.pageSetup)
     Object.assign(excelWorksheet.pageSetup, metadata.pageSetup)
   if (metadata?.headerFooter)
@@ -569,6 +751,10 @@ function applyWorksheetData(excelWorksheet: Worksheet, workbook: IWorkbookData, 
     if (row?.h)
       excelRow.height = row.h * 72 / 96
     excelRow.hidden = row?.hd === BooleanNumber.TRUE
+    applyUniverStyle(
+      excelRow as unknown as ExcelStyleSource,
+      composeStyles(defaultStyle, resolveStyleReference(workbook, row?.s)),
+    )
   }
 
   for (const [columnIndex, column] of Object.entries(sheet.columnData ?? {})) {
@@ -576,6 +762,10 @@ function applyWorksheetData(excelWorksheet: Worksheet, workbook: IWorkbookData, 
     if (column?.w)
       excelColumn.width = Math.max(1, (column.w - 5) / 7)
     excelColumn.hidden = column?.hd === BooleanNumber.TRUE
+    applyUniverStyle(
+      excelColumn as unknown as ExcelStyleSource,
+      composeStyles(defaultStyle, resolveStyleReference(workbook, column?.s)),
+    )
   }
 
   for (const [rowIndex, row] of Object.entries(sheet.cellData ?? {})) {
@@ -584,7 +774,12 @@ function applyWorksheetData(excelWorksheet: Worksheet, workbook: IWorkbookData, 
         continue
       const cell = excelWorksheet.getCell(Number(rowIndex) + 1, Number(columnIndex) + 1)
       applyUniverCell(cell, data)
-      applyUniverStyle(cell, resolveStyle(workbook, data))
+      applyUniverStyle(cell, composeStyles(
+        defaultStyle,
+        resolveStyleReference(workbook, sheet.rowData?.[Number(rowIndex)]?.s),
+        resolveStyleReference(workbook, sheet.columnData?.[Number(columnIndex)]?.s),
+        resolveStyle(workbook, data),
+      ))
     }
   }
 

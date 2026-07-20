@@ -34,4 +34,40 @@ describe('saveCoordinator', () => {
     })).rejects.toThrow('write failed')
     await expect(coordinator.run(async () => 'saved')).resolves.toBe('saved')
   })
+
+  it('deduplicates the same snapshot while preserving later snapshots', async () => {
+    const coordinator = new SaveCoordinator()
+    const file = {}
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let writes = 0
+
+    const first = coordinator.runDeduplicated(file, 'snapshot-1', async () => {
+      writes++
+      await gate
+      return 'first'
+    })
+    const duplicate = coordinator.runDeduplicated(file, 'snapshot-1', async () => {
+      writes++
+      return 'duplicate'
+    })
+    const next = coordinator.runDeduplicated(file, 'snapshot-2', async () => {
+      writes++
+      return 'next'
+    })
+    const lateDuplicate = coordinator.runDeduplicated(file, 'snapshot-1', async () => {
+      writes++
+      return 'late duplicate'
+    })
+
+    expect(duplicate).toBe(first)
+    expect(lateDuplicate).toBe(first)
+    await Promise.resolve()
+    expect(writes).toBe(1)
+    release()
+    await expect(Promise.all([first, duplicate, next, lateDuplicate])).resolves.toEqual(['first', 'first', 'next', 'first'])
+    expect(writes).toBe(2)
+  })
 })

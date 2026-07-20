@@ -6,6 +6,11 @@
 
 - Prevent Univer's outer Radix menu item from closing the local-font panel while its embedded search input is active.
 - Stop pointer movement over the search input from returning focus to the outer menu item.
+- Capture Office snapshots before queued writes and deduplicate identical saves so switching files cannot drop or cross-wire pending changes.
+- Save the file being unloaded even when Obsidian has already started loading another Office file in the same leaf.
+- Keep XLSX style IDs unique across all worksheets instead of allowing later sheets to overwrite earlier sheet styles.
+- Preserve Excel Normal-style fonts, row and column styles, in-cell rich-text fonts, borders, and alignment through XLSX save and reopen.
+- Avoid writing implicit `false` font/alignment values that could overwrite inherited Excel formatting.
 
 ## 1.0.6 (2026-07-20)
 

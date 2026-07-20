@@ -35,6 +35,15 @@ describe('docx capability inspection', () => {
     ])
   })
 
+  it('protects direct formatting that the DOCX exporter cannot reproduce', async () => {
+    const zip = await JSZip.loadAsync(await createEmptyDocx('Formatting'))
+    zip.file('word/document.xml', `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:shd w:fill="FFFF00"/></w:pPr><w:r><w:rPr><w:lang w:val="zh-CN"/></w:rPr><w:t>Styled</w:t></w:r></w:p><w:sectPr/></w:body></w:document>`)
+
+    expect((await inspectDocx(await zip.generateAsync({ type: 'arraybuffer' }))).reasons).toEqual([
+      'formatting that cannot be written safely',
+    ])
+  })
+
   it('rejects malformed packages', async () => {
     const zip = new JSZip()
     zip.file('readme.txt', 'not a document')
