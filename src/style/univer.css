@@ -6,6 +6,7 @@
   overflow: hidden;
 }
 
+.univer-office-view,
 .univer-xlsx-view {
   display: flex;
   flex-direction: column;

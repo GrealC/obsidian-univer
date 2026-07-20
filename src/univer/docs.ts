@@ -9,6 +9,7 @@ import zhTW from '@univerjs/preset-docs-core/locales/zh-TW'
 import { defaultTheme } from '@univerjs/themes'
 import { getLanguage } from '@/utils/common'
 import { createUniver } from './create'
+import { registerLocalFonts } from './fonts'
 
 import '@univerjs/preset-docs-core/lib/index.css'
 
@@ -30,6 +31,8 @@ export function docInit(container: HTMLElement, settings: UniverPluginSettings):
       }),
     ],
   })
+
+  void registerLocalFonts(runtime)
 
   return runtime
 }

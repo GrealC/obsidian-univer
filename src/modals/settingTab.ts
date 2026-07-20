@@ -46,8 +46,20 @@ export class SettingTab extends PluginSettingTab {
           })
       })
     new Setting(containerEl)
-      .setName('Back up Excel files')
-      .setDesc('Create one backup before the first save in each editor session')
+      .setName('Open Word documents')
+      .setDesc('Register the .docx editor. Restart Obsidian after changing this setting. Legacy .doc and macro-enabled .docm files are not modified.')
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.isSupportDocx)
+          .onChange(async (value: boolean) => {
+            this.plugin.settings.isSupportDocx = value
+            await this.plugin.saveSettings()
+            new Notice('Restart Obsidian to apply the Word file handler change.')
+          })
+      })
+    new Setting(containerEl)
+      .setName('Back up Office files')
+      .setDesc('Create one backup before the first save of each Excel or Word editor session')
       .addToggle((toggle) => {
         toggle
           .setValue(this.plugin.settings.createBackups)

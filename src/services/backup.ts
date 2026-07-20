@@ -3,7 +3,7 @@ import { normalizePath } from 'obsidian'
 
 const BACKUP_DIR = 'plugins/univer-plus/backups'
 
-export async function createXlsxBackup(app: App, file: TFile, data: ArrayBuffer): Promise<string> {
+export async function createBinaryBackup(app: App, file: TFile, data: ArrayBuffer): Promise<string> {
   const adapter = app.vault.adapter
   const backupDir = normalizePath(`${app.vault.configDir}/${BACKUP_DIR}`)
   if (!await adapter.exists(backupDir))
@@ -15,3 +15,5 @@ export async function createXlsxBackup(app: App, file: TFile, data: ArrayBuffer)
   await adapter.writeBinary(backupPath, data)
   return backupPath
 }
+
+export const createXlsxBackup = createBinaryBackup

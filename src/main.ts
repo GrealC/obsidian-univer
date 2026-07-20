@@ -5,12 +5,13 @@ import { createNewFile } from '@/utils/file'
 import { ChooseTypeModal } from './modals/chooseType'
 import { SettingTab } from './modals/settingTab'
 import { univerIconSvg } from './utils/common'
+import { Type as DocxType, DocxTypeView } from './views/docx'
 import { Type as UDocType, UDocView } from './views/udoc'
 import { Type as USheetType, USheetView } from './views/usheet'
 import { Type as XlsxType, XlsxTypeView } from './views/xlsx'
 import './style/univer.css'
 
-export type ViewType = typeof USheetType | typeof UDocType | typeof XlsxType
+export type ViewType = typeof USheetType | typeof UDocType | typeof XlsxType | typeof DocxType
 export default class UniverPlugin extends Plugin {
   settings: UniverPluginSettings
   async onload() {
@@ -41,6 +42,18 @@ export default class UniverPlugin extends Plugin {
     })
 
     this.addCommand({
+      id: 'univer-docx',
+      name: 'Create Word Document',
+      checkCallback: (checking) => {
+        if (!this.settings.isSupportDocx)
+          return false
+        if (!checking)
+          void createNewFile(this.app, 'docx')
+        return true
+      },
+    })
+
+    this.addCommand({
       id: 'univer-xlsx',
       name: 'Create Univer Xlsx',
       checkCallback: (checking) => {
@@ -61,6 +74,11 @@ export default class UniverPlugin extends Plugin {
     this.registerView(UDocType, leaf => new UDocView(leaf, this.settings))
     this.registerExtensions(['udoc'], UDocType)
 
+    if (this.settings.isSupportDocx) {
+      this.registerView(DocxType, leaf => new DocxTypeView(leaf, this.settings))
+      this.registerExtensions(['docx'], DocxType)
+    }
+
     if (this.settings.isSupportXlsx) {
       this.registerView(XlsxType, leaf => new XlsxTypeView(leaf, this.settings))
       this.registerExtensions(['xlsx'], XlsxType)
@@ -72,6 +90,7 @@ export default class UniverPlugin extends Plugin {
     this.settings = defu(loadedSettings, {
       language: 'EN',
       isSupportXlsx: true,
+      isSupportDocx: true,
       createBackups: true,
     })
   }

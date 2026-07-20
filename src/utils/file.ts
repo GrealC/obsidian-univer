@@ -1,6 +1,8 @@
 import type { App } from 'obsidian'
 import { normalizePath, Notice } from 'obsidian'
+import { createEmptyDocx } from '@/docx/converter'
 import { createEmptyXlsx } from '@/excel/converter'
+import { Type as DocxType } from '@/views/docx'
 import { Type as DocType } from '@/views/udoc'
 import { Type as SheetType } from '@/views/usheet'
 import { Type as XlsxType } from '@/views/xlsx'
@@ -13,6 +15,8 @@ export async function createNewFile(app: App, suffix: string, folderPath?: strin
     const filePath = await nextAvailablePath(app, suffix, folderPath)
     if (suffix === 'xlsx')
       await app.vault.createBinary(filePath, await createEmptyXlsx())
+    else if (suffix === 'docx')
+      await app.vault.createBinary(filePath, await createEmptyDocx(filePath.replace(/^.*\//, '').replace(/\.docx$/i, '')))
     else
       await app.vault.create(filePath, '')
 
@@ -43,6 +47,8 @@ function getFileType(suffix: string): string {
     return DocType
   if (suffix === 'xlsx')
     return XlsxType
+  if (suffix === 'docx')
+    return DocxType
   return SheetType
 }
 

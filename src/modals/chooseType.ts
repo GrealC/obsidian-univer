@@ -8,6 +8,7 @@ interface ModalText {
   docBtn: string
   sheetBtn: string
   excelBtn: string
+  wordBtn: string
 }
 
 export class ChooseTypeModal extends Modal {
@@ -41,6 +42,13 @@ export class ChooseTypeModal extends Modal {
         })
       : undefined
 
+    const wordBtn = this.settings.isSupportDocx
+      ? btnContainer.createEl('button', {
+          text: 'Word',
+          cls: 'univer-modal-btn',
+        })
+      : undefined
+
     docBtn.onclick = () => {
       createNewFile(this.app, 'udoc')
       this.close()
@@ -54,6 +62,13 @@ export class ChooseTypeModal extends Modal {
     if (excelBtn) {
       excelBtn.onclick = () => {
         void createNewFile(this.app, 'xlsx')
+        this.close()
+      }
+    }
+
+    if (wordBtn) {
+      wordBtn.onclick = () => {
+        void createNewFile(this.app, 'docx')
         this.close()
       }
     }
@@ -71,6 +86,7 @@ export class ChooseTypeModal extends Modal {
         docBtn: 'Univer Документ',
         sheetBtn: 'Univer Таблица',
         excelBtn: 'Excel',
+        wordBtn: 'Word',
       }
     }
     else if (this.settings.language === 'ZH') {
@@ -79,6 +95,7 @@ export class ChooseTypeModal extends Modal {
         docBtn: 'Univer 文档',
         sheetBtn: 'Univer 表格',
         excelBtn: 'Excel',
+        wordBtn: 'Word',
       }
     }
     else if (this.settings.language === 'TW') {
@@ -87,6 +104,7 @@ export class ChooseTypeModal extends Modal {
         docBtn: 'Univer 文檔',
         sheetBtn: 'Univer 表格',
         excelBtn: 'Excel',
+        wordBtn: 'Word',
       }
     }
     else if (this.settings.language === 'VN') {
@@ -95,6 +113,7 @@ export class ChooseTypeModal extends Modal {
         docBtn: 'Univer Tài liệu',
         sheetBtn: 'Univer Bảng',
         excelBtn: 'Excel',
+        wordBtn: 'Word',
       }
     }
     else {
@@ -103,6 +122,7 @@ export class ChooseTypeModal extends Modal {
         docBtn: 'Univer Doc',
         sheetBtn: 'Univer Sheet',
         excelBtn: 'Excel',
+        wordBtn: 'Word',
       }
     }
   }
