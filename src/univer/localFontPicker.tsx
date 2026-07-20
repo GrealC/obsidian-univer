@@ -1,5 +1,5 @@
 import type { IFontConfig } from '@univerjs/preset-sheets-core'
-import type { KeyboardEvent } from 'react'
+import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import type { UniverRuntime } from './create'
 import { ICommandService, LocaleService } from '@univerjs/core'
 import {
@@ -9,7 +9,7 @@ import {
   useDependency,
   useObservable,
 } from '@univerjs/preset-sheets-core'
-import { useDeferredValue, useMemo, useState } from 'react'
+import { useDeferredValue, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { matchesFontSearch } from './fonts'
 
 const MAX_VISIBLE_FONTS = 160
@@ -32,6 +32,19 @@ export function keepFontSearchOpen(event: { type: string, stopPropagation: () =>
     event.stopPropagation()
 }
 
+export function preventFontMenuSelection(event: { preventDefault: () => void }, searchInteraction: boolean): void {
+  if (searchInteraction)
+    event.preventDefault()
+}
+
+export function bindFontMenuSelectionGuard(menuItem: EventTarget, isSearchInteraction: () => boolean): () => void {
+  const handleMenuItemSelect = (event: Event) => {
+    preventFontMenuSelection(event, isSearchInteraction())
+  }
+  menuItem.addEventListener('menu.itemSelect', handleMenuItemSelect)
+  return () => menuItem.removeEventListener('menu.itemSelect', handleMenuItemSelect)
+}
+
 function LocalFontFamilyItem({ id, value }: { id: string, value: string }) {
   const commandService = useDependency(ICommandService)
   const fontService = useDependency(IFontService)
@@ -39,8 +52,18 @@ function LocalFontFamilyItem({ id, value }: { id: string, value: string }) {
   const localeService = useDependency(LocaleService)
   const fonts = useObservable<IFontConfig[]>(fontService.fonts$, [], true)
   const [search, setSearch] = useState('')
+  const pickerRef = useRef<HTMLDivElement>(null)
+  const searchInteractionRef = useRef(false)
   const deferredSearch = useDeferredValue(search)
   const visibleFonts = useMemo(() => filterLocalFonts(fonts, deferredSearch), [deferredSearch, fonts])
+
+  useLayoutEffect(() => {
+    const menuItem = pickerRef.current?.closest('[role="menuitem"]')
+    if (!menuItem)
+      return
+
+    return bindFontMenuSelectionGuard(menuItem, () => searchInteractionRef.current)
+  }, [])
 
   function selectFont(font: IFontConfig): void {
     layoutService.focus()
@@ -61,8 +84,17 @@ function LocalFontFamilyItem({ id, value }: { id: string, value: string }) {
       selectFont(firstMatch)
   }
 
+  function handlePickerPointerDownCapture(event: ReactPointerEvent<HTMLDivElement>): void {
+    const target = event.target as HTMLElement
+    searchInteractionRef.current = Boolean(target.closest?.('.univer-plus-font-picker__search-wrap'))
+  }
+
   return (
-    <div className="univer-plus-font-picker">
+    <div
+      ref={pickerRef}
+      className="univer-plus-font-picker"
+      onPointerDownCapture={handlePickerPointerDownCapture}
+    >
       <div className="univer-plus-font-picker__search-wrap">
         <input
           autoFocus
@@ -74,6 +106,7 @@ function LocalFontFamilyItem({ id, value }: { id: string, value: string }) {
           onMouseDown={keepFontSearchOpen}
           onMouseUp={keepFontSearchOpen}
           onPointerDown={keepFontSearchOpen}
+          onPointerMove={keepFontSearchOpen}
           onPointerUp={keepFontSearchOpen}
           placeholder={localeService.t('univerPlus.searchFonts')}
           type="search"

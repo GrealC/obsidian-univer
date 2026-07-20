@@ -1,7 +1,7 @@
 {
   "name": "univer-plus",
   "type": "module",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "packageManager": "pnpm@11.9.0",
   "description": "Create, edit, and view spreadsheets and documents in various formats like Excel and Word directly within your knowledge base.",
   "author": "DreamNum",

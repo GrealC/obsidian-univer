@@ -1,5 +1,12 @@
 
 
+## 1.0.7 (2026-07-20)
+
+### Bug Fixes
+
+- Prevent Univer's outer Radix menu item from closing the local-font panel while its embedded search input is active.
+- Stop pointer movement over the search input from returning focus to the outer menu item.
+
 ## 1.0.6 (2026-07-20)
 
 ### Bug Fixes
