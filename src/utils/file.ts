@@ -1,13 +1,16 @@
 import type { App } from 'obsidian'
+import type { UniverLanguage } from '@/types/setting'
 import { normalizePath, Notice } from 'obsidian'
 import { createEmptyDocx } from '@/docx/converter'
 import { createEmptyXlsx } from '@/excel/converter'
+import { uiText } from '@/i18n'
 import { Type as DocxType } from '@/views/docx'
 import { Type as DocType } from '@/views/udoc'
 import { Type as SheetType } from '@/views/usheet'
 import { Type as XlsxType } from '@/views/xlsx'
 
-export async function createNewFile(app: App, suffix: string, folderPath?: string): Promise<void> {
+export async function createNewFile(app: App, suffix: string, language: UniverLanguage, folderPath?: string): Promise<void> {
+  const text = uiText(language)
   try {
     if (folderPath && !app.vault.getAbstractFileByPath(folderPath))
       await app.vault.createFolder(folderPath)
@@ -25,10 +28,10 @@ export async function createNewFile(app: App, suffix: string, folderPath?: strin
       active: true,
       state: { file: filePath },
     })
-    new Notice(`Created ${filePath}`)
+    new Notice(`${text.createdFile}: ${filePath}`)
   }
   catch (error) {
-    new Notice(`Cannot create ${suffix} file: ${errorMessage(error)}`, 8000)
+    new Notice(`${text.cannotCreateFile} (${suffix}): ${errorMessage(error)}`, 8000)
   }
 }
 

@@ -15,7 +15,7 @@
 
 `univer-plus` 是一款 Obsidian 桌面端插件，用于在仓库内创建、查看和编辑电子表格与文档。它基于 [dream-num/obsidian-univer](https://github.com/dream-num/obsidian-univer) 继续开发，并以 [Univer](https://github.com/dream-num/univer) 作为编辑器内核。
 
-本分支重点解决旧版长期未更新后出现的兼容性、文件安全和交互问题。当前版本为 **1.0.4**，Univer 已由 **0.2.14** 升级至 **0.25.1**。
+本分支重点解决旧版长期未更新后出现的兼容性、文件安全和交互问题。当前版本为 **1.0.5**，Univer 已由 **0.2.14** 升级至 **0.25.1**。
 
 > [!IMPORTANT]
 > `.xlsx` 和 `.docx` 的目标是安全处理常用 Office 文件，而不是宣称完整复刻 Microsoft Excel 或 Word。插件会在写回可能造成数据丢失时自动进入保护视图。
@@ -27,7 +27,7 @@
 | 项目 | 原实现 | univer-plus |
 | --- | --- | --- |
 | 插件标识 | `univer` | `univer-plus` |
-| 版本线 | 原项目版本 | 从 `1.0.0` 重新开始，当前 `1.0.4` |
+| 版本线 | 原项目版本 | 从 `1.0.0` 重新开始，当前 `1.0.5` |
 | Univer 内核 | `0.2.14` | `0.25.1` |
 | Excel 转换 | Univer Pro 私有交换服务及 WASM | 本地 `ExcelJS` + `JSZip` |
 | 包来源 | 依赖私有 Verdaccio 源 | 全部使用公共 npm registry |
@@ -44,6 +44,7 @@
 - 本机字体发现与搜索，不再依赖写死的字体列表。
 - 支持使用中文名称搜索常见中文字体，例如“微软雅黑”“楷体”“华文楷体”和“霞鹜文楷”。
 - 表格和文档编辑器共用可搜索的本机字体菜单。
+- 修复字体搜索框点击或输入时下拉层意外关闭的问题，并扩大本机字体发现容量。
 - 为 `.xlsx` 编辑器增加加载、未保存、保存中、已保存、保护视图和错误状态反馈。
 
 ![表格编辑](./assets/sheet.gif)
@@ -160,13 +161,14 @@ pnpm build
 1. 在 Obsidian 左侧功能区打开新建菜单。
 2. 选择 Sheet、Doc、Excel 或 Word 创建对应文件。
 3. 也可以直接在文件列表中打开已有 `.usheet`、`.udoc`、`.xlsx` 或 `.docx` 文件。
-4. Office 文件包含不受支持的内容时，顶部状态会显示保护视图；点击状态可查看原因。
+4. 右键文件夹可直接在该文件夹内新建 Excel 工作簿或 Word 文档；右键某个文件时会在其父文件夹内新建。
+5. Office 文件包含不受支持的内容时，顶部状态会显示保护视图；点击状态可查看原因。
 
 ![使用演示](./assets/use.gif)
 
 ## 设置
 
-- **Editor language**：English、简体中文、繁体中文、Русский、Tiếng Việt。
+- **界面语言**：English、简体中文、繁体中文、Русский、Tiếng Việt。修改后会立即刷新设置页、命令面板、右键菜单、文件状态以及已打开的 Univer 编辑器，无需重启。
 - **Open `.xlsx` files with univer-plus**：启用或停用 `.xlsx` 文件处理器；修改后需重启 Obsidian。
 - **Open Word documents**：启用或停用 `.docx` 文件处理器；修改后需重启 Obsidian。
 - **Create backup before first save**：控制每个 Excel 或 Word 编辑会话第一次保存前是否创建备份，默认开启。

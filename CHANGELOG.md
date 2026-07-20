@@ -1,5 +1,17 @@
 
 
+## 1.0.5 (2026-07-20)
+
+### Bug Fixes
+
+- Keep the DOCX/XLSX local-font search field open while clicking and typing.
+- Discover up to 2048 installed font families so late-sorted local and CJK fonts remain searchable.
+- Apply language changes immediately to plugin settings, commands, menus, status labels, protected-view controls, and open Univer editors.
+
+### Features
+
+- Add localized file-explorer context-menu actions for creating `.xlsx` and `.docx` files in the selected folder.
+
 ## [1.1.5](https://github.com/dream-num/obsidian-univer/compare/1.1.4...1.1.5) (2024-09-13)
 
 

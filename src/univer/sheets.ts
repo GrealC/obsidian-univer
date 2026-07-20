@@ -1,6 +1,6 @@
 import type { UniverRuntime } from './create'
 import type { UniverPluginSettings } from '@/types/setting'
-import { mergeLocales } from '@univerjs/core'
+import { LocaleType, mergeLocales } from '@univerjs/core'
 import { UniverSheetsConditionalFormattingPreset } from '@univerjs/preset-sheets-conditional-formatting'
 import conditionalEnUS from '@univerjs/preset-sheets-conditional-formatting/locales/en-US'
 import conditionalRuRU from '@univerjs/preset-sheets-conditional-formatting/locales/ru-RU'
@@ -55,6 +55,7 @@ import sortViVN from '@univerjs/preset-sheets-sort/locales/vi-VN'
 import sortZhCN from '@univerjs/preset-sheets-sort/locales/zh-CN'
 import sortZhTW from '@univerjs/preset-sheets-sort/locales/zh-TW'
 import { defaultTheme } from '@univerjs/themes'
+import { univerLocaleText } from '@/i18n'
 import { getLanguage } from '@/utils/common'
 import { createUniver } from './create'
 import { registerLocalFonts } from './fonts'
@@ -69,20 +70,25 @@ import '@univerjs/preset-sheets-hyper-link/lib/index.css'
 import '@univerjs/preset-sheets-sort/lib/index.css'
 
 const localePacks = {
-  EN: mergeLocales(coreEnUS, conditionalEnUS, validationEnUS, filterEnUS, findEnUS, hyperlinkEnUS, sortEnUS),
-  ZH: mergeLocales(coreZhCN, conditionalZhCN, validationZhCN, filterZhCN, findZhCN, hyperlinkZhCN, sortZhCN),
-  RU: mergeLocales(coreRuRU, conditionalRuRU, validationRuRU, filterRuRU, findRuRU, hyperlinkRuRU, sortRuRU),
-  VN: mergeLocales(coreViVN, conditionalViVN, validationViVN, filterViVN, findViVN, hyperlinkViVN, sortViVN),
-  TW: mergeLocales(coreZhTW, conditionalZhTW, validationZhTW, filterZhTW, findZhTW, hyperlinkZhTW, sortZhTW),
+  EN: mergeLocales(coreEnUS, conditionalEnUS, validationEnUS, filterEnUS, findEnUS, hyperlinkEnUS, sortEnUS, univerLocaleText('EN')),
+  ZH: mergeLocales(coreZhCN, conditionalZhCN, validationZhCN, filterZhCN, findZhCN, hyperlinkZhCN, sortZhCN, univerLocaleText('ZH')),
+  RU: mergeLocales(coreRuRU, conditionalRuRU, validationRuRU, filterRuRU, findRuRU, hyperlinkRuRU, sortRuRU, univerLocaleText('RU')),
+  VN: mergeLocales(coreViVN, conditionalViVN, validationViVN, filterViVN, findViVN, hyperlinkViVN, sortViVN, univerLocaleText('VN')),
+  TW: mergeLocales(coreZhTW, conditionalZhTW, validationZhTW, filterZhTW, findZhTW, hyperlinkZhTW, sortZhTW, univerLocaleText('TW')),
+}
+const locales = {
+  [LocaleType.EN_US]: localePacks.EN,
+  [LocaleType.ZH_CN]: localePacks.ZH,
+  [LocaleType.RU_RU]: localePacks.RU,
+  [LocaleType.VI_VN]: localePacks.VN,
+  [LocaleType.ZH_TW]: localePacks.TW,
 }
 
 export function sheetInit(container: HTMLElement, settings: UniverPluginSettings): UniverRuntime {
   const locale = getLanguage(settings)
   const runtime = createUniver({
     locale,
-    locales: {
-      [locale]: localePacks[settings.language],
-    },
+    locales,
     theme: defaultTheme,
     presets: [
       UniverSheetsCorePreset({
@@ -113,49 +119,30 @@ export function sheetInit(container: HTMLElement, settings: UniverPluginSettings
     ],
   })
 
-  installBasicMenus(runtime, settings.language)
+  installBasicMenus(runtime)
   installLocalFontPicker(runtime)
   void registerLocalFonts(runtime)
 
   return runtime
 }
 
-function installBasicMenus(runtime: UniverRuntime, language: UniverPluginSettings['language']): void {
-  const zh = language === 'ZH' || language === 'TW'
-  const labels = zh
-    ? {
-        insertRow: '在上方插入一行',
-        insertColumn: '在左侧插入一列',
-        freezeRow: '冻结首行',
-        freezeColumn: '冻结首列',
-        unfreeze: '取消冻结窗格',
-        gridlines: '显示或隐藏网格线',
-      }
-    : {
-        insertRow: 'Insert row above',
-        insertColumn: 'Insert column left',
-        freezeRow: 'Freeze top row',
-        freezeColumn: 'Freeze first column',
-        unfreeze: 'Unfreeze panes',
-        gridlines: 'Toggle gridlines',
-      }
-
+function installBasicMenus(runtime: UniverRuntime): void {
   runtime.univerAPI.createMenu({
     id: 'univer-plus.insert-row-before',
-    title: labels.insertRow,
+    title: 'univerPlus.insertRow',
     action: () => { void runtime.univerAPI.executeCommand(InsertRowBeforeCommand.id, { value: 1 }) },
   }).appendTo([RibbonPosition.INSERT, RibbonInsertGroup.EDIT])
   runtime.univerAPI.createMenu({
     id: 'univer-plus.insert-column-before',
-    title: labels.insertColumn,
+    title: 'univerPlus.insertColumn',
     action: () => { void runtime.univerAPI.executeCommand(InsertColBeforeCommand.id, { value: 1 }) },
   }).appendTo([RibbonPosition.INSERT, RibbonInsertGroup.EDIT])
 
   for (const [id, title, command] of [
-    ['freeze-row', labels.freezeRow, SetFirstRowFrozenCommand.id],
-    ['freeze-column', labels.freezeColumn, SetFirstColumnFrozenCommand.id],
-    ['unfreeze', labels.unfreeze, CancelFrozenCommand.id],
-    ['gridlines', labels.gridlines, ToggleGridlinesCommand.id],
+    ['freeze-row', 'univerPlus.freezeRow', SetFirstRowFrozenCommand.id],
+    ['freeze-column', 'univerPlus.freezeColumn', SetFirstColumnFrozenCommand.id],
+    ['unfreeze', 'univerPlus.unfreeze', CancelFrozenCommand.id],
+    ['gridlines', 'univerPlus.gridlines', ToggleGridlinesCommand.id],
   ] as const) {
     runtime.univerAPI.createMenu({
       id: `univer-plus.${id}`,

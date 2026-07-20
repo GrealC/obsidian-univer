@@ -26,6 +26,10 @@ export function filterLocalFonts(fonts: readonly IFontConfig[], search: string, 
   return matchingFonts.slice(0, limit)
 }
 
+export function keepFontSearchOpen(event: { stopPropagation: () => void }): void {
+  event.stopPropagation()
+}
+
 function LocalFontFamilyItem({ id, value }: { id: string, value: string }) {
   const commandService = useDependency(ICommandService)
   const fontService = useDependency(IFontService)
@@ -60,11 +64,14 @@ function LocalFontFamilyItem({ id, value }: { id: string, value: string }) {
       <div className="univer-plus-font-picker__search-wrap">
         <input
           autoFocus
-          aria-label="Search local fonts"
+          aria-label={localeService.t('univerPlus.searchFonts')}
           className="univer-plus-font-picker__search"
           onChange={event => setSearch(event.target.value)}
+          onClick={keepFontSearchOpen}
           onKeyDown={handleSearchKeyDown}
-          placeholder="Search fonts"
+          onMouseDown={keepFontSearchOpen}
+          onPointerDown={keepFontSearchOpen}
+          placeholder={localeService.t('univerPlus.searchFonts')}
           type="search"
           value={search}
         />
@@ -88,7 +95,7 @@ function LocalFontFamilyItem({ id, value }: { id: string, value: string }) {
         ))}
         {visibleFonts.length === 0 && (
           <li className="univer-plus-font-picker__empty" role="presentation">
-            {search.trim() ? 'No matching fonts' : 'No local fonts found'}
+            {localeService.t(search.trim() ? 'univerPlus.noMatchingFonts' : 'univerPlus.noLocalFonts')}
           </li>
         )}
       </ul>

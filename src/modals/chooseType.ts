@@ -1,6 +1,7 @@
 import type { App } from 'obsidian'
 import type { UniverPluginSettings } from '@/types/setting'
 import { Modal } from 'obsidian'
+import { uiText } from '@/i18n'
 import { createNewFile } from '@/utils/file'
 
 interface ModalText {
@@ -37,38 +38,38 @@ export class ChooseTypeModal extends Modal {
 
     const excelBtn = this.settings.isSupportXlsx
       ? btnContainer.createEl('button', {
-          text: 'Excel',
+          text: this.getModalText().excelBtn,
           cls: 'univer-modal-btn',
         })
       : undefined
 
     const wordBtn = this.settings.isSupportDocx
       ? btnContainer.createEl('button', {
-          text: 'Word',
+          text: this.getModalText().wordBtn,
           cls: 'univer-modal-btn',
         })
       : undefined
 
     docBtn.onclick = () => {
-      createNewFile(this.app, 'udoc')
+      void createNewFile(this.app, 'udoc', this.settings.language)
       this.close()
     }
 
     sheetBtn.onclick = () => {
-      createNewFile(this.app, 'usheet')
+      void createNewFile(this.app, 'usheet', this.settings.language)
       this.close()
     }
 
     if (excelBtn) {
       excelBtn.onclick = () => {
-        void createNewFile(this.app, 'xlsx')
+        void createNewFile(this.app, 'xlsx', this.settings.language)
         this.close()
       }
     }
 
     if (wordBtn) {
       wordBtn.onclick = () => {
-        void createNewFile(this.app, 'docx')
+        void createNewFile(this.app, 'docx', this.settings.language)
         this.close()
       }
     }
@@ -80,50 +81,13 @@ export class ChooseTypeModal extends Modal {
   }
 
   getModalText(): ModalText {
-    if (this.settings.language === 'RU') {
-      return {
-        title: 'Выберите тип создаваемого файла',
-        docBtn: 'Univer Документ',
-        sheetBtn: 'Univer Таблица',
-        excelBtn: 'Excel',
-        wordBtn: 'Word',
-      }
-    }
-    else if (this.settings.language === 'ZH') {
-      return {
-        title: '请选择您要创建的文件类型',
-        docBtn: 'Univer 文档',
-        sheetBtn: 'Univer 表格',
-        excelBtn: 'Excel',
-        wordBtn: 'Word',
-      }
-    }
-    else if (this.settings.language === 'TW') {
-      return {
-        title: '請選擇要建立的文件類型',
-        docBtn: 'Univer 文檔',
-        sheetBtn: 'Univer 表格',
-        excelBtn: 'Excel',
-        wordBtn: 'Word',
-      }
-    }
-    else if (this.settings.language === 'VN') {
-      return {
-        title: 'Vui lòng chọn loại tệp bạn muốn tạo',
-        docBtn: 'Univer Tài liệu',
-        sheetBtn: 'Univer Bảng',
-        excelBtn: 'Excel',
-        wordBtn: 'Word',
-      }
-    }
-    else {
-      return {
-        title: 'Please choose the type of file you want to create',
-        docBtn: 'Univer Doc',
-        sheetBtn: 'Univer Sheet',
-        excelBtn: 'Excel',
-        wordBtn: 'Word',
-      }
+    const text = uiText(this.settings.language)
+    return {
+      title: text.chooseType,
+      docBtn: text.univerDoc,
+      sheetBtn: text.univerSheet,
+      excelBtn: text.newExcel,
+      wordBtn: text.newWord,
     }
   }
 }

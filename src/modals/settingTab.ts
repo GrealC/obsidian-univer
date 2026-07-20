@@ -1,6 +1,8 @@
 import type { App } from 'obsidian'
 import type UniverPlugin from '../main'
+import type { UniverLanguage } from '@/types/setting'
 import { Notice, PluginSettingTab, Setting } from 'obsidian'
+import { uiText } from '@/i18n'
 
 export class SettingTab extends PluginSettingTab {
   plugin: UniverPlugin
@@ -12,12 +14,13 @@ export class SettingTab extends PluginSettingTab {
 
   display(): void {
     const { containerEl } = this
+    const text = uiText(this.plugin.settings.language)
     containerEl.empty()
     new Setting(containerEl).setName('univer-plus').setHeading()
 
     new Setting(containerEl)
-      .setName('Language')
-      .setDesc('Language used by new Univer editor views')
+      .setName(text.settingsLanguageName)
+      .setDesc(text.settingsLanguageDesc)
       .addDropdown((drop) => {
         drop
           .addOptions({
@@ -28,38 +31,38 @@ export class SettingTab extends PluginSettingTab {
             TW: '繁體中文',
           })
           .setValue(this.plugin.settings.language)
-          .onChange(async (value: 'ZH' | 'EN' | 'RU' | 'TW' | 'VN') => {
-            this.plugin.settings.language = value
-            await this.plugin.saveSettings()
+          .onChange(async (value: UniverLanguage) => {
+            await this.plugin.updateLanguage(value)
+            this.display()
           })
       })
     new Setting(containerEl)
-      .setName('Open Excel workbooks')
-      .setDesc('Register the .xlsx editor. Restart Obsidian after changing this setting. Legacy .xls and macro-enabled .xlsm files are not modified.')
+      .setName(text.settingsExcelName)
+      .setDesc(text.settingsExcelDesc)
       .addToggle((toggle) => {
         toggle
           .setValue(this.plugin.settings.isSupportXlsx)
           .onChange(async (value: boolean) => {
             this.plugin.settings.isSupportXlsx = value
             await this.plugin.saveSettings()
-            new Notice('Restart Obsidian to apply the Excel file handler change.')
+            new Notice(text.restartExcel)
           })
       })
     new Setting(containerEl)
-      .setName('Open Word documents')
-      .setDesc('Register the .docx editor. Restart Obsidian after changing this setting. Legacy .doc and macro-enabled .docm files are not modified.')
+      .setName(text.settingsWordName)
+      .setDesc(text.settingsWordDesc)
       .addToggle((toggle) => {
         toggle
           .setValue(this.plugin.settings.isSupportDocx)
           .onChange(async (value: boolean) => {
             this.plugin.settings.isSupportDocx = value
             await this.plugin.saveSettings()
-            new Notice('Restart Obsidian to apply the Word file handler change.')
+            new Notice(text.restartWord)
           })
       })
     new Setting(containerEl)
-      .setName('Back up Office files')
-      .setDesc('Create a backup before the first save and keep the latest three backups for each Excel or Word file')
+      .setName(text.settingsBackupName)
+      .setDesc(text.settingsBackupDesc)
       .addToggle((toggle) => {
         toggle
           .setValue(this.plugin.settings.createBackups)

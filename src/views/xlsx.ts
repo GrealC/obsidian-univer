@@ -7,6 +7,7 @@ import { FileView, Notice, setIcon } from 'obsidian'
 import { inspectXlsx } from '@/excel/capabilities'
 import { exportXlsx, importXlsx } from '@/excel/converter'
 import { assertSafeWorkbookTransition } from '@/excel/safety'
+import { uiText } from '@/i18n'
 import { createXlsxBackup, pruneBinaryBackups } from '@/services/backup'
 import { SaveCoordinator } from '@/services/saveCoordinator'
 import { sheetInit } from '@/univer/sheets'
@@ -50,6 +51,15 @@ export class XlsxTypeView extends FileView {
 
   getViewType(): string {
     return Type
+  }
+
+  setLanguage(): void {
+    this.runtime?.univerAPI.setLocale(getLanguage(this.settings))
+    if (this.statusState) {
+      const status = this.statusState
+      this.statusState = undefined
+      this.setStatus(status)
+    }
   }
 
   async onOpen(): Promise<void> {
@@ -276,24 +286,15 @@ export class XlsxTypeView extends FileView {
   }
 
   private statusLabel(status: WorkbookStatus): string {
-    const zh = this.settings.language === 'ZH' || this.settings.language === 'TW'
-    const labels = zh
-      ? {
-          loading: '正在打开工作簿',
-          dirty: '有未保存的更改，点击立即保存',
-          saving: '正在保存工作簿',
-          saved: '工作簿已保存',
-          protected: '保护视图，点击查看原因',
-          error: '工作簿操作失败',
-        }
-      : {
-          loading: 'Opening workbook',
-          dirty: 'Unsaved changes; click to save now',
-          saving: 'Saving workbook',
-          saved: 'Workbook saved',
-          protected: 'Protected view; click for details',
-          error: 'Workbook operation failed',
-        }
+    const text = uiText(this.settings.language)
+    const labels = {
+      loading: text.openingWorkbook,
+      dirty: text.workbookDirty,
+      saving: text.savingWorkbook,
+      saved: text.workbookSaved,
+      protected: text.workbookProtected,
+      error: text.workbookError,
+    }
     return labels[status]
   }
 

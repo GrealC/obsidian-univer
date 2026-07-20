@@ -1,5 +1,7 @@
+export type UniverLanguage = 'ZH' | 'EN' | 'RU' | 'VN' | 'TW'
+
 export interface UniverPluginSettings {
-  language: 'ZH' | 'EN' | 'RU' | 'VN' | 'TW'
+  language: UniverLanguage
   isSupportXlsx: boolean
   isSupportDocx: boolean
   createBackups: boolean

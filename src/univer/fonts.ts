@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process'
 import process from 'node:process'
 import { promisify } from 'node:util'
 
-const LOCAL_FONT_LIMIT = 512
+const LOCAL_FONT_LIMIT = 2048
 const LOCALIZED_FONT_LABELS: Readonly<Record<string, string>> = {
   'alibaba puhuiti': '阿里巴巴普惠体',
   'dengxian': '等线',

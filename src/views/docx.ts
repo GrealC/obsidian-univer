@@ -8,10 +8,12 @@ import { inspectDocx } from '@/docx/capabilities'
 import { exportDocx, importDocx } from '@/docx/converter'
 import { renderDocxPreview } from '@/docx/preview'
 import { assertSafeDocumentTransition } from '@/docx/safety'
+import { uiText } from '@/i18n'
 import { createBinaryBackup, pruneBinaryBackups } from '@/services/backup'
 import { SaveCoordinator } from '@/services/saveCoordinator'
 import { docInit } from '@/univer/docs'
 import { observeTheme } from '@/univer/theme'
+import { getLanguage } from '@/utils/common'
 
 export const Type = 'univer-docx'
 const AUTO_SAVE_DELAY = 2000
@@ -45,6 +47,11 @@ export class DocxTypeView extends FileView {
   private protectedReasons: string[] = []
   private lastReadOnlyNoticeAt = 0
   private creatingEditableCopy = false
+  private protectedTitleEl?: HTMLElement
+  private protectedMessageEl?: HTMLElement
+  private editCopyEl?: HTMLButtonElement
+  private editCopyLabelEl?: HTMLElement
+  private protectedDetailsEl?: HTMLButtonElement
 
   constructor(leaf: WorkspaceLeaf, private readonly settings: UniverPluginSettings) {
     super(leaf)
@@ -52,6 +59,16 @@ export class DocxTypeView extends FileView {
 
   getViewType(): string {
     return Type
+  }
+
+  setLanguage(): void {
+    this.runtime?.univerAPI.setLocale(getLanguage(this.settings))
+    if (this.statusState) {
+      const status = this.statusState
+      this.statusState = undefined
+      this.setStatus(status)
+    }
+    this.refreshProtectedHeader()
   }
 
   async onOpen(): Promise<void> {
@@ -262,24 +279,15 @@ export class DocxTypeView extends FileView {
   }
 
   private statusLabel(status: DocumentStatus): string {
-    const zh = this.settings.language === 'ZH' || this.settings.language === 'TW'
-    const labels = zh
-      ? {
-          loading: '正在打开 Word 文档',
-          dirty: '有未保存的更改，点击立即保存',
-          saving: '正在保存 Word 文档',
-          saved: 'Word 文档已保存',
-          protected: '保护视图，点击查看原因',
-          error: 'Word 文档操作失败',
-        }
-      : {
-          loading: 'Opening Word document',
-          dirty: 'Unsaved changes; click to save now',
-          saving: 'Saving Word document',
-          saved: 'Word document saved',
-          protected: 'Protected view; click for details',
-          error: 'Word document operation failed',
-        }
+    const text = uiText(this.settings.language)
+    const labels = {
+      loading: text.openingDocument,
+      dirty: text.documentDirty,
+      saving: text.savingDocument,
+      saved: text.documentSaved,
+      protected: text.documentProtected,
+      error: text.documentError,
+    }
     return labels[status]
   }
 
@@ -302,37 +310,43 @@ export class DocxTypeView extends FileView {
   }
 
   private renderProtectedHeader(container: HTMLElement): void {
-    const zh = this.settings.language === 'ZH' || this.settings.language === 'TW'
     const bar = this.contentEl.createDiv({ cls: 'univer-protected-bar' })
     const icon = bar.createSpan({ cls: 'univer-protected-bar__icon' })
     setIcon(icon, 'shield-check')
     const copy = bar.createDiv({ cls: 'univer-protected-bar__copy' })
-    copy.createEl('strong', { text: zh ? '高保真只读预览' : 'High-fidelity read-only preview' })
-    copy.createSpan({ text: zh ? '复杂 Word 版式已保留，原文件不会被修改' : 'Complex Word layout is preserved; the original file will not be modified' })
+    this.protectedTitleEl = copy.createEl('strong')
+    this.protectedMessageEl = copy.createSpan()
     const editCopy = bar.createEl('button', {
       cls: 'univer-protected-bar__edit',
       attr: {
         type: 'button',
-        title: zh ? '创建可编辑 DOCX 副本' : 'Create an editable DOCX copy',
       },
     })
+    this.editCopyEl = editCopy
     const editIcon = editCopy.createSpan()
     setIcon(editIcon, 'file-pen-line')
-    editCopy.createSpan({ text: zh ? '编辑副本' : 'Edit copy' })
+    this.editCopyLabelEl = editCopy.createSpan()
     editCopy.addEventListener('click', () => {
       void this.createEditableCopy(editCopy).catch(() => undefined)
     })
     const details = bar.createEl('button', {
       cls: 'clickable-icon univer-protected-bar__details',
-      attr: {
-        'aria-label': zh ? '查看保护视图原因' : 'View protected-view details',
-        'title': zh ? '查看保护视图原因' : 'View protected-view details',
-        'type': 'button',
-      },
+      attr: { type: 'button' },
     })
+    this.protectedDetailsEl = details
     setIcon(details, 'info')
     details.addEventListener('click', () => this.showReadOnlyNotice())
+    this.refreshProtectedHeader()
     container.before(bar)
+  }
+
+  private refreshProtectedHeader(): void {
+    const text = uiText(this.settings.language)
+    this.protectedTitleEl?.setText(text.previewTitle)
+    this.protectedMessageEl?.setText(text.previewMessage)
+    this.editCopyLabelEl?.setText(text.editCopy)
+    this.editCopyEl?.setAttrs({ 'aria-label': text.editCopyTitle, 'title': text.editCopyTitle })
+    this.protectedDetailsEl?.setAttrs({ 'aria-label': text.protectedDetails, 'title': text.protectedDetails })
   }
 
   private async createEditableCopy(button: HTMLButtonElement): Promise<void> {
@@ -404,6 +418,11 @@ export class DocxTypeView extends FileView {
     this.protectedReasons = []
     this.lastReadOnlyNoticeAt = 0
     this.creatingEditableCopy = false
+    this.protectedTitleEl = undefined
+    this.protectedMessageEl = undefined
+    this.editCopyEl = undefined
+    this.editCopyLabelEl = undefined
+    this.protectedDetailsEl = undefined
   }
 
   private disposeEditor(): void {

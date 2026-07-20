@@ -5,6 +5,7 @@ import type { UniverRuntime } from '@/univer/create'
 import { Notice, TextFileView } from 'obsidian'
 import { docInit } from '@/univer/docs'
 import { observeTheme } from '@/univer/theme'
+import { getLanguage } from '@/utils/common'
 
 export const Type = 'univer-doc'
 
@@ -52,6 +53,10 @@ export class UDocView extends TextFileView {
 
   getViewType(): string {
     return Type
+  }
+
+  setLanguage(): void {
+    this.runtime?.univerAPI.setLocale(getLanguage(this.settings))
   }
 
   clear(): void {

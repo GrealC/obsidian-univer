@@ -48,4 +48,11 @@ describe('local font discovery', () => {
       'STKaiti',
     ])
   })
+
+  it('does not truncate large installed-font collections at the old 512-font boundary', () => {
+    const fonts = createLocalFontConfigs(Array.from({ length: 700 }, (_, index) => `Local Font ${index}`))
+
+    expect(fonts).toHaveLength(700)
+    expect(fonts.some(font => font.value === 'Local Font 699')).toBe(true)
+  })
 })

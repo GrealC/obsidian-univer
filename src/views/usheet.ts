@@ -5,6 +5,7 @@ import type { UniverRuntime } from '@/univer/create'
 import { Notice, TextFileView } from 'obsidian'
 import { sheetInit } from '@/univer/sheets'
 import { observeTheme } from '@/univer/theme'
+import { getLanguage } from '@/utils/common'
 
 export const Type = 'univer-sheet'
 
@@ -52,6 +53,10 @@ export class USheetView extends TextFileView {
 
   getViewType(): string {
     return Type
+  }
+
+  setLanguage(): void {
+    this.runtime?.univerAPI.setLocale(getLanguage(this.settings))
   }
 
   clear(): void {
