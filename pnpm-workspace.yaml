@@ -1,0 +1,10 @@
+allowBuilds:
+  esbuild: true
+  protobufjs: true
+  simple-git-hooks: true
+  unrs-resolver: true
+onlyBuiltDependencies:
+  - esbuild
+  - protobufjs
+  - simple-git-hooks
+  - unrs-resolver

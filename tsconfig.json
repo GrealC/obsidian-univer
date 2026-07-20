@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2018",
+    "target": "ES2020",
     "jsx": "preserve",
     "lib": [
       "DOM",
@@ -8,13 +8,12 @@
       "ES6",
       "ES7",
       "ESNext",
-      "DOM.Iterable",
-      "WebWorker"
+      "DOM.Iterable"
     ],
     "experimentalDecorators": true,
     "baseUrl": ".",
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "Bundler",
     "paths": {
       "@/*": [
         "src/*"
@@ -24,11 +23,13 @@
     "allowJs": true,
     "strictNullChecks": true,
     "noImplicitAny": true,
+    "useUnknownInCatchVariables": true,
     "importHelpers": true,
     "inlineSourceMap": true,
     "inlineSources": true,
     "allowSyntheticDefaultImports": true,
-    "isolatedModules": false
+    "isolatedModules": false,
+    "skipLibCheck": true
   },
   "include": [
     "src/**/*"

@@ -1,9 +1,7 @@
-import { existsSync } from 'node:fs'
 import { copyFile, rename, writeFile } from 'node:fs/promises'
 import { builtinModules } from 'node:module'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
-import { univerPlugin } from '@univerjs/vite-plugin'
 import dotenv from 'dotenv'
 import { defineConfig } from 'vite'
 import pkg from './package.json'
@@ -20,7 +18,7 @@ function generate(isDev?: boolean) {
     async writeBundle() {
       await writeFile(resolve(buildDir, 'manifest.json'), `${JSON.stringify({
         id: pkg.name,
-        name: 'Univer',
+        name: 'univer-plus',
         version: pkg.version,
         minAppVersion: '1.5.11',
         description: pkg.description,
@@ -31,17 +29,9 @@ function generate(isDev?: boolean) {
       }, null, 2)}\n`)
       await copyFile(resolve(buildDir, 'manifest.json'), join(process.cwd(), 'manifest.json'))
       rename(resolve(buildDir, 'style.css'), resolve(buildDir, 'styles.css'))
-      // eslint-disable-next-line no-console
       console.log('build!')
     },
   }
-}
-
-const exchangeWasm = resolve(__dirname, './node_modules/@univerjs-pro/exchange-wasm/package.json')
-
-if (!existsSync(exchangeWasm)) {
-  // eslint-disable-next-line no-console
-  console.log('exchange-wasm not found, using mock exchange-wasm')
 }
 
 export default defineConfig((_) => {
@@ -50,12 +40,10 @@ export default defineConfig((_) => {
   return {
     plugins: [
       generate(dev),
-      univerPlugin(),
     ],
     resolve: {
       alias: {
         '@': resolve(__dirname, './src'),
-        '@univerjs-pro/exchange-wasm': existsSync(exchangeWasm) ? resolve(__dirname, './node_modules/@univerjs-pro/exchange-wasm') : resolve(__dirname, './src/mock'),
       },
     },
     build: {
@@ -70,7 +58,7 @@ export default defineConfig((_) => {
       },
       emptyOutDir: true,
       sourcemap: dev ? 'inline' : false,
-      target: 'es2018',
+      target: 'es2020',
       rollupOptions: {
         output: {
           dynamicImportInCjs: false,
@@ -94,6 +82,9 @@ export default defineConfig((_) => {
           '@lezer/highlight',
           '@lezer/lr',
           ...builtinModules,
+          'node:child_process',
+          'node:process',
+          'node:util',
         ],
       },
     },

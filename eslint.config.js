@@ -1,7 +1,7 @@
 import antfu from '@antfu/eslint-config'
 
 export default antfu({
-  ignores: ['**/data/**.ts'],
+  ignores: ['**/.pnpm-store/**', '**/data/**.ts', '**/dist/**'],
 }, {
   rules: {
     'no-new': 'off',

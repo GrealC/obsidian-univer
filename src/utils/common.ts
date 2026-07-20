@@ -1,14 +1,5 @@
 import type { UniverPluginSettings } from '@/types/setting'
 import { LocaleType } from '@univerjs/core'
-import { enUS, ruRU, viVN, zhCN, zhTW } from 'univer:locales'
-
-export const univerLocales = {
-  [LocaleType.EN_US]: enUS,
-  [LocaleType.ZH_CN]: zhCN,
-  [LocaleType.RU_RU]: ruRU,
-  [LocaleType.ZH_TW]: zhTW,
-  [LocaleType.VI_VN]: viVN,
-}
 
 export const univerIconSvg = `
 <g clip-path="url(#clip0_249_2)">

@@ -1,6 +1,6 @@
 import type { App } from 'obsidian'
 import type UniverPlugin from '../main'
-import { PluginSettingTab, Setting } from 'obsidian'
+import { Notice, PluginSettingTab, Setting } from 'obsidian'
 
 export class SettingTab extends PluginSettingTab {
   plugin: UniverPlugin
@@ -13,11 +13,11 @@ export class SettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this
     containerEl.empty()
-    containerEl.createEl('h2', { text: 'Univer Settings' })
+    new Setting(containerEl).setName('univer-plus').setHeading()
 
     new Setting(containerEl)
-      .setName('language')
-      .setDesc('choose the language')
+      .setName('Language')
+      .setDesc('Language used by new Univer editor views')
       .addDropdown((drop) => {
         drop
           .addOptions({
@@ -34,13 +34,25 @@ export class SettingTab extends PluginSettingTab {
           })
       })
     new Setting(containerEl)
-      .setName('support xlsx file type')
-      .setDesc('choose whether to support xlsx file type and its import and export')
+      .setName('Open Excel workbooks')
+      .setDesc('Register the .xlsx editor. Restart Obsidian after changing this setting. Legacy .xls and macro-enabled .xlsm files are not modified.')
       .addToggle((toggle) => {
         toggle
           .setValue(this.plugin.settings.isSupportXlsx)
           .onChange(async (value: boolean) => {
             this.plugin.settings.isSupportXlsx = value
+            await this.plugin.saveSettings()
+            new Notice('Restart Obsidian to apply the Excel file handler change.')
+          })
+      })
+    new Setting(containerEl)
+      .setName('Back up Excel files')
+      .setDesc('Create one backup before the first save in each editor session')
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.createBackups)
+          .onChange(async (value: boolean) => {
+            this.plugin.settings.createBackups = value
             await this.plugin.saveSettings()
           })
       })

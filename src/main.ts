@@ -1,27 +1,25 @@
 import type { UniverPluginSettings } from '@/types/setting'
-import { createNewFile } from '@/utils/file'
 import { defu } from 'defu'
 import { addIcon, Plugin } from 'obsidian'
+import { createNewFile } from '@/utils/file'
 import { ChooseTypeModal } from './modals/chooseType'
 import { SettingTab } from './modals/settingTab'
 import { univerIconSvg } from './utils/common'
-import { injectWasm } from './utils/wasm'
 import { Type as UDocType, UDocView } from './views/udoc'
 import { Type as USheetType, USheetView } from './views/usheet'
 import { Type as XlsxType, XlsxTypeView } from './views/xlsx'
 import './style/univer.css'
 
-export type ViewType = typeof USheetType | typeof UDocType
+export type ViewType = typeof USheetType | typeof UDocType | typeof XlsxType
 export default class UniverPlugin extends Plugin {
   settings: UniverPluginSettings
   async onload() {
     await this.loadSettings()
-    await injectWasm()
 
     addIcon('univer', univerIconSvg)
 
     // ribbon icon & the class
-    this.addRibbonIcon('univer', 'Univer', () => {
+    this.addRibbonIcon('univer', 'univer-plus', () => {
       const modal = new ChooseTypeModal(this.app, this.settings)
       modal.open()
     })
@@ -45,8 +43,12 @@ export default class UniverPlugin extends Plugin {
     this.addCommand({
       id: 'univer-xlsx',
       name: 'Create Univer Xlsx',
-      callback: () => {
-        createNewFile(this.app, 'xlsx')
+      checkCallback: (checking) => {
+        if (!this.settings.isSupportXlsx)
+          return false
+        if (!checking)
+          void createNewFile(this.app, 'xlsx')
+        return true
       },
     })
 
@@ -59,8 +61,10 @@ export default class UniverPlugin extends Plugin {
     this.registerView(UDocType, leaf => new UDocView(leaf, this.settings))
     this.registerExtensions(['udoc'], UDocType)
 
-    this.registerView(XlsxType, leaf => new XlsxTypeView(leaf, this.settings))
-    this.registerExtensions(['xlsx', 'xls', 'xlsm'], XlsxType)
+    if (this.settings.isSupportXlsx) {
+      this.registerView(XlsxType, leaf => new XlsxTypeView(leaf, this.settings))
+      this.registerExtensions(['xlsx'], XlsxType)
+    }
   }
 
   async loadSettings() {
@@ -68,12 +72,11 @@ export default class UniverPlugin extends Plugin {
     this.settings = defu(loadedSettings, {
       language: 'EN',
       isSupportXlsx: true,
+      createBackups: true,
     })
   }
 
   async saveSettings() {
     await this.saveData(this.settings)
   }
-
-  async onunload() {}
 }

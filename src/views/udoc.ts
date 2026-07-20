@@ -1,75 +1,80 @@
-import type { UniverPluginSettings } from '@/types/setting'
-import type { DocumentDataModel, IDocumentData, Univer } from '@univerjs/core'
+import type { IDisposable, IDocumentData } from '@univerjs/core'
 import type { WorkspaceLeaf } from 'obsidian'
+import type { UniverPluginSettings } from '@/types/setting'
+import type { UniverRuntime } from '@/univer/create'
+import { Notice, TextFileView } from 'obsidian'
 import { docInit } from '@/univer/docs'
-import { IResourceLoaderService, Tools, UniverInstanceType } from '@univerjs/core'
-import { FUniver } from '@univerjs/facade'
-import { TextFileView } from 'obsidian'
+import { observeTheme } from '@/univer/theme'
 
 export const Type = 'univer-doc'
 
 export class UDocView extends TextFileView {
-  documentModal: DocumentDataModel
-  univer: Univer
-  FUniver: FUniver
-  rootContainer: HTMLDivElement
-  settings: UniverPluginSettings
+  private runtime?: UniverRuntime
+  private commandDisposable?: IDisposable
+  private themeObserver?: MutationObserver
+  private sourceData = ''
 
-  constructor(leaf: WorkspaceLeaf, settings: UniverPluginSettings) {
+  constructor(leaf: WorkspaceLeaf, private readonly settings: UniverPluginSettings) {
     super(leaf)
-    this.settings = settings
   }
 
   getViewData(): string {
-    const resourceLoaderService = this.univer.__getInjector().get(IResourceLoaderService)
-    const unitId = this.documentModal.getUnitId()
-    const snapshot = resourceLoaderService.saveUnit(unitId)
-    return JSON.stringify(Tools.deepClone(snapshot))
+    const document = this.runtime?.univerAPI.getActiveDocument()
+    return document ? JSON.stringify(document.getSnapshot()) : this.sourceData
   }
 
   setViewData(data: string): void {
-    this.univer?.dispose()
+    this.disposeEditor()
+    this.sourceData = data
+    this.contentEl.empty()
+    this.contentEl.addClass('univer-view')
+    const container = this.contentEl.createDiv({ cls: 'univer-editor-container' })
 
-    const option = {
-      container: this.rootContainer,
-      header: true,
+    let documentData: Partial<IDocumentData> = {}
+    if (data) {
+      try {
+        documentData = JSON.parse(data) as IDocumentData
+      }
+      catch (error) {
+        container.createDiv({ cls: 'univer-error', text: 'This Univer Document is not valid JSON. The original file has not been changed.' })
+        new Notice(`Cannot open ${this.file?.name ?? 'Univer Document'}: ${errorMessage(error)}`)
+        return
+      }
     }
-    this.univer = docInit(option, this.settings)
-    this.FUniver = FUniver.newAPI(this.univer)
 
-    let docData: IDocumentData
-
-    try {
-      docData = JSON.parse(data)
-    }
-    catch {
-      docData = {} as IDocumentData
-    }
-
-    setTimeout(() => {
-      this.documentModal = this.univer.createUnit(UniverInstanceType.UNIVER_DOC, docData)
-    }, 0)
-
-    this.FUniver.onCommandExecuted(() => {
+    this.runtime = docInit(container, this.settings)
+    this.runtime.univerAPI.createUniverDoc(documentData)
+    this.themeObserver = observeTheme(this.runtime.univerAPI)
+    this.commandDisposable = this.runtime.univerAPI.addEvent(this.runtime.univerAPI.Event.CommandExecuted, () => {
       this.requestSave()
     })
   }
 
-  getViewType() {
+  getViewType(): string {
     return Type
   }
 
-  clear(): void { }
-
-  async onOpen() {
-    this.rootContainer = this.contentEl as HTMLDivElement
-    this.rootContainer.id = 'udoc-app'
-    this.rootContainer.classList.add('uproduct-container')
+  clear(): void {
+    this.disposeEditor()
+    this.contentEl.empty()
   }
 
-  async onClose() {
-    this.requestSave()
-
-    this.univer.dispose()
+  async onClose(): Promise<void> {
+    if (this.runtime && this.file)
+      await this.save()
+    this.disposeEditor()
   }
+
+  private disposeEditor(): void {
+    this.commandDisposable?.dispose()
+    this.commandDisposable = undefined
+    this.themeObserver?.disconnect()
+    this.themeObserver = undefined
+    this.runtime?.univer.dispose()
+    this.runtime = undefined
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }

@@ -1,7 +1,7 @@
-import type { UniverPluginSettings } from '@/types/setting'
 import type { App } from 'obsidian'
-import { createNewFile } from '@/utils/file'
+import type { UniverPluginSettings } from '@/types/setting'
 import { Modal } from 'obsidian'
+import { createNewFile } from '@/utils/file'
 
 interface ModalText {
   title: string
@@ -26,18 +26,20 @@ export class ChooseTypeModal extends Modal {
 
     const docBtn = btnContainer.createEl('button', {
       text: this.getModalText().docBtn,
-      cls: 'univer-mdal-btn',
+      cls: 'univer-modal-btn',
     })
 
     const sheetBtn = btnContainer.createEl('button', {
       text: this.getModalText().sheetBtn,
-      cls: 'univer-mdal-btn',
+      cls: 'univer-modal-btn',
     })
 
-    const excelBtn = btnContainer.createEl('button', {
-      text: 'Excel',
-      cls: 'univer-mdal-btn',
-    })
+    const excelBtn = this.settings.isSupportXlsx
+      ? btnContainer.createEl('button', {
+          text: 'Excel',
+          cls: 'univer-modal-btn',
+        })
+      : undefined
 
     docBtn.onclick = () => {
       createNewFile(this.app, 'udoc')
@@ -49,9 +51,11 @@ export class ChooseTypeModal extends Modal {
       this.close()
     }
 
-    excelBtn.onclick = () => {
-      createNewFile(this.app, 'xlsx')
-      this.close()
+    if (excelBtn) {
+      excelBtn.onclick = () => {
+        void createNewFile(this.app, 'xlsx')
+        this.close()
+      }
     }
   }
 

@@ -4,15 +4,16 @@ on:
   release:
     types: [published]
 
-env:
-  PLUGIN_NAME: obsidian-univer
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -20,58 +21,20 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
-          registry-url: ${{ secrets.VERDACCIO_URL }}
-          scope: '@univerjs-pro'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.VERDACCIO_TOKEN }}
 
-      - name: Build
-        id: build
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify
         run: |
-          pnpm i
+          pnpm typecheck
+          pnpm lint
+          pnpm test
           pnpm build
-          mkdir ${{ env.PLUGIN_NAME }}
-          echo "All build files are ready."
 
-      - name: Get latest release upload URL
-        id: get_latest_release
-        run: |
-          upload_url=$(gh release view --json uploadUrl -q .uploadUrl)
-          echo "upload_url=$upload_url" >>  $GITHUB_OUTPUT
+      - name: Upload release assets
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-
-      - name: Upload main.js
-        id: upload-main
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-        with:
-          upload_url: ${{ steps.get_latest_release.outputs.upload_url }}
-          asset_path: ./dist/main.js
-          asset_name: main.js
-          asset_content_type: text/javascript
-
-      - name: Upload manifest.json
-        id: upload-manifest
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-        with:
-          upload_url: ${{ steps.get_latest_release.outputs.upload_url }}
-          asset_path: ./dist/manifest.json
-          asset_name: manifest.json
-          asset_content_type: application/json
-
-      - name: Upload styles.css
-        id: upload-css
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-        with:
-          upload_url: ${{ steps.get_latest_release.outputs.upload_url }}
-          asset_path: ./dist/styles.css
-          asset_name: styles.css
-          asset_content_type: text/css
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/main.js dist/manifest.json dist/styles.css --clobber
